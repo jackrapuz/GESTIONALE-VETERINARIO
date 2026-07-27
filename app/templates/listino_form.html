@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titolo %}{{ titolo }}{% endblock %}
+{% block contenuto %}
+<h1>{{ titolo }}</h1>
+{% if errori %}
+<div class="errori"><strong>Correggi gli errori:</strong><ul>{% for e in errori %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% set azione = '/listino/' ~ prestazione.id if prestazione.id else '/listino' %}
+<form class="scheda" method="post" action="{{ azione }}">
+  <div class="riga">
+    <div class="campo"><label>Codice</label><input name="codice" value="{{ prestazione.codice|default('') }}"></div>
+    <div class="campo" style="flex:2 1 320px"><label>Descrizione</label><input name="descrizione" value="{{ prestazione.descrizione|default('') }}"></div>
+  </div>
+  <div class="riga">
+    <div class="campo"><label>Prezzo unitario €</label><input name="prezzo_unitario" value="{{ prestazione.prezzo_unitario|default('0.00') }}"></div>
+    <div class="campo"><label>Aliquota IVA %</label><input name="aliquota_iva" value="{{ prestazione.aliquota_iva|default('22.00') }}"></div>
+    <div class="campo"><label>Unità di misura</label><input name="unita_misura" value="{{ prestazione.unita_misura|default('nr') }}"></div>
+  </div>
+  <div class="riga">
+    <div class="campo"><label>Tipo spesa TS</label><input name="tipo_spesa_ts" value="{{ prestazione.tipo_spesa_ts|default('SV') }}"></div>
+    <div class="campo check"><input type="checkbox" id="attiva" name="attiva" {{ 'checked' if prestazione.attiva }}><label for="attiva">Attiva</label></div>
+  </div>
+  <div class="azioni">
+    <button class="btn" type="submit">Salva</button>
+    <a class="btn secondario" href="/listino">Annulla</a>
+  </div>
+</form>
+{% endblock %}

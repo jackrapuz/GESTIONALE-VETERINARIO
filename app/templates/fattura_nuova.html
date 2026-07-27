@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block titolo %}Nuova fattura{% endblock %}
+{% block contenuto %}
+<h1>Nuova fattura</h1>
+
+{% if errori %}
+<div class="errori"><strong>Correggi gli errori:</strong>
+  <ul>{% for e in errori %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<form class="scheda" method="post" action="/fatture" id="form-fattura" style="max-width:960px">
+  <div class="riga">
+    <div class="campo" style="flex:2 1 320px">
+      <label>Cliente</label>
+      <select name="cliente_id" id="cliente_id" required>
+        <option value="">— seleziona —</option>
+        {% for c in clienti %}
+        <option value="{{ c.id }}" {{ 'selected' if dati.cliente_id == c.id|string }}>{{ c.denominazione }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="campo"><label>Data emissione</label>
+      <input type="date" name="data_emissione" value="{{ dati.data_emissione or oggi }}"></div>
+  </div>
+
+  <h2 class="sez">Righe</h2>
+  <table id="tab-righe" class="righe-fattura">
+    <thead>
+      <tr>
+        <th style="width:34%">Descrizione</th>
+        <th class="num" style="width:9%">Q.tà</th>
+        <th class="num" style="width:14%">Prezzo €</th>
+        <th class="num" style="width:10%">Sc. %</th>
+        <th class="num" style="width:9%">IVA %</th>
+        <th style="width:9%">Sp. TS</th>
+        <th class="num" style="width:13%">Imponibile</th>
+        <th style="width:2%"></th>
+      </tr>
+    </thead>
+    <tbody id="righe-body"></tbody>
+  </table>
+  <p><button type="button" class="btn secondario" id="agg-riga">+ Aggiungi riga</button>
+     <span class="muted">oppure scegli dal listino:</span>
+     <select id="add-listino">
+       <option value="">— dal listino —</option>
+       {% for p in prestazioni %}
+       <option value="{{ p.id }}">{{ p.descrizione }} ({{ p.prezzo_unitario }} €)</option>
+       {% endfor %}
+     </select>
+  </p>
+
+  <div class="riga">
+    <div class="campo"><label>Sconto cliente %</label>
+      <input type="number" step="0.01" min="0" name="sconto_cliente_pct" id="sconto_cliente_pct"
+             value="{{ dati.sconto_cliente_pct or '0' }}"></div>
+    <div class="campo"><label>Modalità pagamento</label>
+      <select name="modalita_pagamento">
+        {% for m in modalita %}<option value="{{ m }}" {{ 'selected' if dati.modalita_pagamento == m }}>{{ m }}</option>{% endfor %}
+      </select></div>
+    <div class="campo check"><input type="checkbox" id="pagamento_tracciato" name="pagamento_tracciato"
+             {{ 'checked' if dati.pagamento_tracciato or not dati }}><label for="pagamento_tracciato">Pagamento tracciato</label></div>
+  </div>
+
+  <div class="riga">
+    <div class="campo"><label>Stato</label>
+      <select name="stato" id="stato">
+        <option value="emessa" {{ 'selected' if dati.stato != 'incassata' }}>Emessa</option>
+        <option value="incassata" {{ 'selected' if dati.stato == 'incassata' }}>Incassata</option>
+      </select></div>
+    <div class="campo"><label>Data pagamento / incasso</label>
+      <input type="date" name="data_pagamento" value="{{ dati.data_pagamento or '' }}"></div>
+    <div class="campo check"><input type="checkbox" id="opposizione_ts" name="opposizione_ts"
+             {{ 'checked' if dati.opposizione_ts }}><label for="opposizione_ts">Opposizione invio Sistema TS</label></div>
+  </div>
+
+  <div class="riga">
+    <div class="campo check"><input type="checkbox" id="ritenuta_applicata" name="ritenuta_applicata"
+             {{ 'checked' if dati.ritenuta_applicata }}><label for="ritenuta_applicata">Applica ritenuta d'acconto</label></div>
+    <div class="campo" id="box-ritenuta"><label>Ritenuta %</label>
+      <input type="number" step="0.01" min="0" name="ritenuta_pct" id="ritenuta_pct"
+             value="{{ dati.ritenuta_pct or '20' }}"></div>
+  </div>
+
+  <div class="campo"><label>Note</label>
+    <textarea name="note" rows="2">{{ dati.note or '' }}</textarea></div>
+
+  <div class="riepilogo" id="riepilogo">
+    <div><span>Imponibile</span><b id="t-imponibile">0,00</b></div>
+    <div><span>Contributo ENPAV (<span id="t-enpav-pct"></span>%)</span><b id="t-enpav">0,00</b></div>
+    <div><span>Base imponibile IVA</span><b id="t-base">0,00</b></div>
+    <div><span>IVA</span><b id="t-iva">0,00</b></div>
+    <div class="tot"><span>Totale documento</span><b id="t-totale">0,00</b></div>
+    <div id="riga-ritenuta" style="display:none"><span>Ritenuta d'acconto</span><b id="t-ritenuta">0,00</b></div>
+    <div id="riga-netto" style="display:none"><span>Netto a pagare</span><b id="t-netto">0,00</b></div>
+  </div>
+
+  <div class="azioni">
+    <button class="btn" type="submit">Emetti fattura</button>
+    <a class="btn secondario" href="/fatture">Annulla</a>
+  </div>
+</form>
+
+<template id="tpl-riga">
+  <tr class="riga-fattura">
+    <td><input type="hidden" name="r_prestazione_id" value=""><input name="r_descrizione" placeholder="Descrizione prestazione"></td>
+    <td class="num"><input class="num" type="number" step="0.01" name="r_quantita" value="1"></td>
+    <td class="num"><input class="num" type="number" step="0.01" name="r_prezzo" value="0.00"></td>
+    <td class="num"><input class="num" type="number" step="0.01" name="r_sconto" value="0"></td>
+    <td class="num"><input class="num" type="number" step="0.01" name="r_aliquota" value="22"></td>
+    <td><input name="r_tipo_spesa" value="SV" style="width:4.5rem"></td>
+    <td class="num imp-riga">0,00</td>
+    <td><button type="button" class="btn secondario rimuovi" title="Rimuovi">✕</button></td>
+  </tr>
+</template>
+
+<script>
+  window.DATI_FATTURA = {
+    clienti: {{ clienti|tojson }},
+    prestazioni: {{ prestazioni|tojson }},
+    enpavPct: {{ (studio.enpav_pct or '2')|tojson }}
+  };
+</script>
+<script src="/static/js/fattura.js"></script>
+{% endblock %}

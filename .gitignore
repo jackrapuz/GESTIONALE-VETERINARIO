@@ -1,0 +1,29 @@
+# Dati applicativi locali (non versionare il database e i backup)
+dati/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Packaging PyInstaller
+build/
+dist/
+*.spec
+
+# Sistema / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Output export generati
+export_output/

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titolo %}{{ titolo }}{% endblock %}
+{% block contenuto %}
+<h1>{{ titolo }}</h1>
+{% if errori %}
+<div class="errori"><strong>Correggi gli errori:</strong><ul>{% for e in errori %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% set azione = '/pazienti/' ~ paziente.id if paziente.id else '/pazienti' %}
+<form class="scheda" method="post" action="{{ azione }}">
+  <div class="riga">
+    <div class="campo" style="flex:1 1 100%"><label>Proprietario (cliente)</label>
+      <select name="cliente_id">
+        <option value="">— seleziona —</option>
+        {% for c in clienti %}
+        <option value="{{ c.id }}" {{ 'selected' if paziente.cliente_id|string == c.id|string }}>
+          {% if c.tipo == 'giuridica' %}{{ c.ragione_sociale }}{% else %}{{ c.cognome }} {{ c.nome }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="riga">
+    <div class="campo"><label>Nome</label><input name="nome" value="{{ paziente.nome|default('') }}"></div>
+    <div class="campo"><label>Specie</label><input name="specie" value="{{ paziente.specie|default('Equino') }}"></div>
+    <div class="campo"><label>Razza</label><input name="razza" value="{{ paziente.razza|default('') }}"></div>
+  </div>
+  <div class="riga">
+    <div class="campo"><label>Sesso</label><input name="sesso" value="{{ paziente.sesso|default('') }}"></div>
+    <div class="campo"><label>Data di nascita</label><input name="data_nascita" type="date" value="{{ paziente.data_nascita|default('') }}"></div>
+    <div class="campo"><label>Mantello</label><input name="mantello" value="{{ paziente.mantello|default('') }}"></div>
+  </div>
+  <div class="riga">
+    <div class="campo"><label>Microchip</label><input name="microchip" value="{{ paziente.microchip|default('') }}"></div>
+    <div class="campo"><label>Passaporto / UELN</label><input name="passaporto_ueln" value="{{ paziente.passaporto_ueln|default('') }}"></div>
+  </div>
+  <div class="riga">
+    <div class="campo" style="flex:1 1 100%"><label>Note</label><textarea name="note" rows="2">{{ paziente.note|default('') }}</textarea></div>
+  </div>
+  <div class="azioni">
+    <button class="btn" type="submit">Salva</button>
+    <a class="btn secondario" href="/pazienti">Annulla</a>
+  </div>
+</form>
+{% endblock %}

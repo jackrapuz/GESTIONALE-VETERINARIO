@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titolo %}{{ titolo|default('Gestionale') }}{% endblock %} · Gestionale Veterinario</title>
+  <link rel="stylesheet" href="/static/css/stile.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">🐴 Gestionale Veterinario</a>
+    <nav>
+      <a href="/clienti">Clienti</a>
+      <a href="/pazienti">Pazienti</a>
+      <a href="/listino">Listino</a>
+      <a href="/fatture">Fatture</a>
+      <a href="/export">Esportazioni</a>
+      <a href="/backup">Backup</a>
+      <a href="/impostazioni">Impostazioni</a>
+    </nav>
+  </header>
+
+  {% with messaggi = request.query_params.getlist('msg') %}
+    {% if messaggi %}
+      <div class="flash">{% for m in messaggi %}<p>{{ m }}</p>{% endfor %}</div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="contenuto">
+    {% block contenuto %}{% endblock %}
+  </main>
+
+  <footer class="footer">Dati salvati solo su questo computer · nessuna connessione a Internet</footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

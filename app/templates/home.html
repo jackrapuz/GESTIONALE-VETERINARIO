@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titolo %}Home{% endblock %}
+{% block contenuto %}
+<h1>Benvenuto</h1>
+<p>Gestionale offline per la fatturazione dello studio veterinario.</p>
+<div class="card-grid">
+  <a class="card" href="/clienti"><h2>Clienti</h2><p>Anagrafica proprietari</p></a>
+  <a class="card" href="/pazienti"><h2>Pazienti</h2><p>Animali (equini e altro)</p></a>
+  <a class="card" href="/listino"><h2>Listino</h2><p>Prestazioni e prezzi</p></a>
+  <a class="card" href="/fatture"><h2>Fatture</h2><p>Emissione e archivio</p></a>
+  <a class="card" href="/export"><h2>Esportazioni</h2><p>Sistema TS e commercialista</p></a>
+  <a class="card" href="/backup"><h2>Backup</h2><p>Copia, ripristino, dati esempio</p></a>
+  <a class="card" href="/impostazioni"><h2>Impostazioni</h2><p>Dati dello studio</p></a>
+</div>
+{% endblock %}

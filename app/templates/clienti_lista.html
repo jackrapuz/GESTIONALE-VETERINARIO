@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block titolo %}Clienti{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>Clienti</h1>
+  <a class="btn" href="/clienti/nuovo">+ Nuovo cliente</a>
+</div>
+{% if clienti %}
+<table>
+  <thead><tr><th>Nominativo</th><th>Tipo</th><th>CF / P.IVA</th><th>Città</th><th></th></tr></thead>
+  <tbody>
+    {% for c in clienti %}
+    <tr>
+      <td><a href="/clienti/{{ c.id }}">
+        {% if c.tipo == 'giuridica' %}{{ c.ragione_sociale }}{% else %}{{ c.cognome }} {{ c.nome }}{% endif %}</a>
+        {% if c.sostituto_imposta %}<span class="badge">sostituto</span>{% endif %}
+      </td>
+      <td>{{ 'Giuridica' if c.tipo == 'giuridica' else 'Fisica' }}</td>
+      <td>{{ c.codice_fiscale or c.partita_iva }}</td>
+      <td>{{ c.citta }}</td>
+      <td>
+        <form method="post" action="/clienti/{{ c.id }}/elimina" onsubmit="return confirm('Eliminare il cliente?');">
+          <button class="btn secondario" type="submit">Elimina</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nessun cliente ancora. Creane uno con “Nuovo cliente”.</p>
+{% endif %}
+{% endblock %}
