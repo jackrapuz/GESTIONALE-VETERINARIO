@@ -9,6 +9,8 @@ from __future__ import annotations
 import socket
 import threading
 import webbrowser
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import uvicorn
@@ -16,10 +18,49 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.db import DATI_DIR, init_db
+from app.db import DATI_DIR, get_conn, init_db
 from app.templating import templates
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def _statistiche_dashboard() -> dict:
+    """Numeri di sintesi per la dashboard iniziale (anno corrente)."""
+    anno = date.today().year
+    conn = get_conn()
+    try:
+        def _scalare(sql, args=()):
+            return conn.execute(sql, args).fetchone()[0]
+
+        def _somma(sql, args=()):
+            tot = Decimal("0")
+            for r in conn.execute(sql, args).fetchall():
+                tot += Decimal(r[0] or "0")
+            return tot
+
+        n_clienti = _scalare("SELECT COUNT(*) FROM clienti")
+        n_pazienti = _scalare("SELECT COUNT(*) FROM pazienti")
+        n_fatture = _scalare(
+            "SELECT COUNT(*) FROM fatture WHERE tipo_documento='fattura' "
+            "AND stato!='annullata' AND anno=?", (anno,))
+        fatturato = _somma(
+            "SELECT totale_documento FROM fatture WHERE tipo_documento='fattura' "
+            "AND stato!='annullata' AND anno=?", (anno,))
+        da_incassare = _somma(
+            "SELECT totale_documento FROM fatture WHERE tipo_documento='fattura' "
+            "AND stato='emessa' AND anno=?", (anno,))
+        ultime = [dict(r) for r in conn.execute(
+            "SELECT * FROM fatture ORDER BY anno DESC, numero_progressivo DESC LIMIT 6"
+        ).fetchall()]
+        studio_nome = conn.execute("SELECT denominazione FROM studio WHERE id=1").fetchone()[0]
+    finally:
+        conn.close()
+    return {
+        "anno": anno, "n_clienti": n_clienti, "n_pazienti": n_pazienti,
+        "n_fatture": n_fatture, "fatturato": str(fatturato),
+        "da_incassare": str(da_incassare), "ultime": ultime,
+        "studio_nome": (studio_nome or "").strip() or "Studio Veterinario",
+    }
 
 
 def create_app() -> FastAPI:
@@ -46,7 +87,9 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
-        return templates.TemplateResponse(request, "home.html", {"titolo": "Home"})
+        ctx = {"titolo": "Home"}
+        ctx.update(_statistiche_dashboard())
+        return templates.TemplateResponse(request, "home.html", ctx)
 
     return app
 
