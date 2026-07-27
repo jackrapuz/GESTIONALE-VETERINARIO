@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block titolo %}Pazienti{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>Pazienti</h1>
+  <a class="btn" href="/pazienti/nuovo">+ Nuovo paziente</a>
+</div>
+{% if pazienti %}
+<table>
+  <thead><tr><th>Nome</th><th>Specie</th><th>Proprietario</th><th>Microchip / UELN</th><th></th></tr></thead>
+  <tbody>
+    {% for p in pazienti %}
+    <tr>
+      <td><a href="/pazienti/{{ p.id }}">{{ p.nome }}</a></td>
+      <td>{{ p.specie }}{% if p.razza %} · {{ p.razza }}{% endif %}</td>
+      <td>{% if p.cli_rag %}{{ p.cli_rag }}{% else %}{{ p.cli_cognome }} {{ p.cli_nome }}{% endif %}</td>
+      <td>{{ p.microchip or p.passaporto_ueln }}</td>
+      <td>
+        <form method="post" action="/pazienti/{{ p.id }}/elimina" onsubmit="return confirm('Eliminare il paziente?');">
+          <button class="btn secondario" type="submit">Elimina</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nessun paziente ancora.</p>
+{% endif %}
+{% endblock %}

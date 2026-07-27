@@ -1,0 +1,79 @@
+/* Stile minimale, leggibile, senza dipendenze esterne. */
+:root {
+  --bg: #f6f7f9;
+  --fg: #1f2933;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --border: #d7dce3;
+  --card: #ffffff;
+  --ok: #15803d;
+  --err: #b91c1c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.5;
+}
+.topbar {
+  display: flex; align-items: center; gap: 1.5rem;
+  background: #fff; border-bottom: 1px solid var(--border);
+  padding: 0.6rem 1.2rem;
+}
+.topbar .brand { font-weight: 700; text-decoration: none; color: var(--fg); font-size: 1.1rem; }
+.topbar nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+.topbar nav a { text-decoration: none; color: var(--muted); padding: 0.2rem 0; }
+.topbar nav a:hover { color: var(--accent); }
+.contenuto { max-width: 1000px; margin: 1.5rem auto; padding: 0 1.2rem; }
+.footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 2rem 0 1rem; }
+
+h1 { margin-top: 0; }
+a { color: var(--accent); }
+
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+.card {
+  display: block; background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 1rem 1.2rem; text-decoration: none; color: inherit;
+}
+.card:hover { border-color: var(--accent); }
+.card h2 { margin: 0 0 0.3rem; font-size: 1.1rem; }
+.card p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); }
+th { background: #eef1f5; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+form.scheda { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; max-width: 720px; }
+.riga { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.9rem; }
+.campo { display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 200px; }
+.campo label { font-size: 0.82rem; color: var(--muted); }
+input, select, textarea {
+  font: inherit; padding: 0.45rem 0.55rem; border: 1px solid var(--border);
+  border-radius: 6px; background: #fff; width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.check { flex-direction: row; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
+.check input { width: auto; }
+
+.btn {
+  display: inline-block; background: var(--accent); color: var(--accent-fg);
+  border: none; border-radius: 6px; padding: 0.5rem 1rem; font: inherit;
+  cursor: pointer; text-decoration: none;
+}
+.btn:hover { filter: brightness(0.95); }
+.btn.secondario { background: #e2e8f0; color: var(--fg); }
+.btn.pericolo { background: var(--err); }
+.azioni { display: flex; gap: 0.6rem; margin-top: 1rem; align-items: center; }
+
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap; }
+.flash { max-width: 1000px; margin: 1rem auto 0; padding: 0 1.2rem; }
+.flash p { background: #ecfdf3; border: 1px solid #abefc6; color: var(--ok); padding: 0.6rem 0.9rem; border-radius: 8px; margin: 0.3rem 0; }
+.errori { background: #fef2f2; border: 1px solid #fecaca; color: var(--err); padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; }
+.errori ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+.muted { color: var(--muted); }
+.badge { font-size: 0.75rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: #e2e8f0; color: var(--fg); }

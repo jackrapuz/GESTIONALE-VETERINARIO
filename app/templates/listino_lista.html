@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titolo %}Listino{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>Listino prestazioni</h1>
+  <a class="btn" href="/listino/nuovo">+ Nuova prestazione</a>
+</div>
+{% if prestazioni %}
+<table>
+  <thead><tr><th>Codice</th><th>Descrizione</th><th class="num">Prezzo €</th><th class="num">IVA %</th><th>Spesa TS</th><th>Stato</th><th></th></tr></thead>
+  <tbody>
+    {% for p in prestazioni %}
+    <tr>
+      <td>{{ p.codice }}</td>
+      <td><a href="/listino/{{ p.id }}">{{ p.descrizione }}</a></td>
+      <td class="num">{{ p.prezzo_unitario|euro }}</td>
+      <td class="num">{{ p.aliquota_iva }}</td>
+      <td>{{ p.tipo_spesa_ts }}</td>
+      <td>{{ 'Attiva' if p.attiva else 'Disattivata' }}</td>
+      <td>
+        <form method="post" action="/listino/{{ p.id }}/elimina" onsubmit="return confirm('Eliminare la prestazione?');">
+          <button class="btn secondario" type="submit">Elimina</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Listino vuoto.</p>
+{% endif %}
+{% endblock %}

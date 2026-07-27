@@ -1,0 +1,217 @@
+"""Connessione SQLite, schema e migrazioni.
+
+Principi:
+- Un unico file DB in ``dati/gestionale.db`` (modalita' WAL per robustezza).
+- Accesso via ``sqlite3`` stdlib, niente ORM. Le query stanno nei router/moduli.
+- Le migrazioni sono una lista ordinata e *idempotente*: ogni voce porta lo
+  schema alla versione successiva. ``schema_version`` (tabella a riga singola)
+  tiene traccia della versione applicata. Aggiungere una migrazione = appendere
+  una funzione alla lista MIGRATIONS, mai modificarne una gia' rilasciata.
+"""
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+from typing import Callable
+
+# Radice del progetto = cartella che contiene "app/". Calcolata dal file corrente
+# cosi' funziona sia in sviluppo sia dentro l'eseguibile PyInstaller.
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATI_DIR = BASE_DIR / "dati"
+DB_PATH = DATI_DIR / "gestionale.db"
+
+
+def get_conn(db_path: Path | str | None = None) -> sqlite3.Connection:
+    """Apre una connessione configurata (WAL, foreign_keys, row_factory).
+
+    ``db_path`` serve principalmente ai test (DB temporaneo). In produzione si
+    usa il default ``DB_PATH``.
+    """
+    path = Path(db_path) if db_path is not None else DB_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+# ---------------------------------------------------------------------------
+# Migrazioni
+# ---------------------------------------------------------------------------
+def _m001_schema_iniziale(conn: sqlite3.Connection) -> None:
+    """Schema iniziale completo (v1). Vedi PIANO.md sezione Modello dati."""
+    conn.executescript(
+        """
+        CREATE TABLE studio (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            denominazione TEXT NOT NULL DEFAULT '',
+            nome TEXT NOT NULL DEFAULT '',
+            cognome TEXT NOT NULL DEFAULT '',
+            codice_fiscale TEXT NOT NULL DEFAULT '',
+            partita_iva TEXT NOT NULL DEFAULT '',
+            via TEXT NOT NULL DEFAULT '',
+            cap TEXT NOT NULL DEFAULT '',
+            citta TEXT NOT NULL DEFAULT '',
+            prov TEXT NOT NULL DEFAULT '',
+            email TEXT NOT NULL DEFAULT '',
+            telefono TEXT NOT NULL DEFAULT '',
+            iban TEXT NOT NULL DEFAULT '',
+            regime TEXT NOT NULL DEFAULT 'ordinario',
+            n_iscrizione_albo TEXT NOT NULL DEFAULT '',
+            enpav_pct TEXT NOT NULL DEFAULT '2.00',
+            iva_default_pct TEXT NOT NULL DEFAULT '22.00',
+            formato_numerazione TEXT NOT NULL DEFAULT '{n}/{anno}',
+            testo_dicitura_opposizione_ts TEXT NOT NULL DEFAULT
+                'Il cliente si oppone alla trasmissione dei dati al Sistema Tessera Sanitaria.',
+            logo_path TEXT NOT NULL DEFAULT ''
+        );
+        -- riga singola di configurazione, creata subito con i default
+        INSERT INTO studio (id) VALUES (1);
+
+        CREATE TABLE clienti (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL DEFAULT 'fisica' CHECK (tipo IN ('fisica','giuridica')),
+            nome TEXT NOT NULL DEFAULT '',
+            cognome TEXT NOT NULL DEFAULT '',
+            ragione_sociale TEXT NOT NULL DEFAULT '',
+            codice_fiscale TEXT NOT NULL DEFAULT '',
+            partita_iva TEXT NOT NULL DEFAULT '',
+            via TEXT NOT NULL DEFAULT '',
+            cap TEXT NOT NULL DEFAULT '',
+            citta TEXT NOT NULL DEFAULT '',
+            provincia TEXT NOT NULL DEFAULT '',
+            email TEXT NOT NULL DEFAULT '',
+            telefono TEXT NOT NULL DEFAULT '',
+            sconto_default_pct TEXT NOT NULL DEFAULT '0.00',
+            opposizione_ts_default INTEGER NOT NULL DEFAULT 0,
+            sostituto_imposta INTEGER NOT NULL DEFAULT 0,
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        CREATE TABLE pazienti (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER NOT NULL REFERENCES clienti(id) ON DELETE CASCADE,
+            nome TEXT NOT NULL DEFAULT '',
+            specie TEXT NOT NULL DEFAULT 'Equino',
+            razza TEXT NOT NULL DEFAULT '',
+            microchip TEXT NOT NULL DEFAULT '',
+            sesso TEXT NOT NULL DEFAULT '',
+            data_nascita TEXT NOT NULL DEFAULT '',
+            mantello TEXT NOT NULL DEFAULT '',
+            passaporto_ueln TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE prestazioni (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codice TEXT NOT NULL DEFAULT '',
+            descrizione TEXT NOT NULL DEFAULT '',
+            prezzo_unitario TEXT NOT NULL DEFAULT '0.00',
+            aliquota_iva TEXT NOT NULL DEFAULT '22.00',
+            tipo_spesa_ts TEXT NOT NULL DEFAULT 'SV',
+            unita_misura TEXT NOT NULL DEFAULT 'nr',
+            attiva INTEGER NOT NULL DEFAULT 1
+        );
+
+        CREATE TABLE fatture (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo_documento TEXT NOT NULL DEFAULT 'fattura'
+                CHECK (tipo_documento IN ('fattura','nota_credito')),
+            anno INTEGER NOT NULL,
+            numero_progressivo INTEGER NOT NULL,
+            numero_visualizzato TEXT NOT NULL,
+            data_emissione TEXT NOT NULL,
+            cliente_id INTEGER REFERENCES clienti(id),
+            -- snapshot immutabile dei dati cliente al momento dell'emissione
+            cli_denominazione TEXT NOT NULL DEFAULT '',
+            cli_codice_fiscale TEXT NOT NULL DEFAULT '',
+            cli_partita_iva TEXT NOT NULL DEFAULT '',
+            cli_indirizzo TEXT NOT NULL DEFAULT '',
+            modalita_pagamento TEXT NOT NULL DEFAULT '',
+            pagamento_tracciato INTEGER NOT NULL DEFAULT 1,
+            data_pagamento TEXT NOT NULL DEFAULT '',
+            stato TEXT NOT NULL DEFAULT 'emessa'
+                CHECK (stato IN ('emessa','incassata','annullata')),
+            opposizione_ts INTEGER NOT NULL DEFAULT 0,
+            ritenuta_applicata INTEGER NOT NULL DEFAULT 0,
+            ritenuta_pct TEXT NOT NULL DEFAULT '0.00',
+            enpav_pct TEXT NOT NULL DEFAULT '2.00',
+            -- totali salvati (immutabili) come stringhe Decimal a 2 decimali
+            imponibile TEXT NOT NULL DEFAULT '0.00',
+            contributo_enpav TEXT NOT NULL DEFAULT '0.00',
+            base_iva TEXT NOT NULL DEFAULT '0.00',
+            iva_totale TEXT NOT NULL DEFAULT '0.00',
+            ritenuta_importo TEXT NOT NULL DEFAULT '0.00',
+            totale_documento TEXT NOT NULL DEFAULT '0.00',
+            netto_a_pagare TEXT NOT NULL DEFAULT '0.00',
+            documento_riferimento_id INTEGER REFERENCES fatture(id),
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE (tipo_documento, anno, numero_progressivo)
+        );
+
+        CREATE TABLE righe_fattura (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fattura_id INTEGER NOT NULL REFERENCES fatture(id) ON DELETE CASCADE,
+            prestazione_id INTEGER REFERENCES prestazioni(id),
+            descrizione TEXT NOT NULL DEFAULT '',
+            quantita TEXT NOT NULL DEFAULT '1',
+            prezzo_unitario TEXT NOT NULL DEFAULT '0.00',
+            sconto_riga_pct TEXT NOT NULL DEFAULT '0.00',
+            aliquota_iva TEXT NOT NULL DEFAULT '22.00',
+            tipo_spesa_ts TEXT NOT NULL DEFAULT 'SV',
+            imponibile_riga TEXT NOT NULL DEFAULT '0.00',
+            ordine INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE numerazione (
+            anno INTEGER NOT NULL,
+            tipo_documento TEXT NOT NULL,
+            ultimo_numero INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (anno, tipo_documento)
+        );
+
+        CREATE INDEX idx_pazienti_cliente ON pazienti(cliente_id);
+        CREATE INDEX idx_fatture_cliente ON fatture(cliente_id);
+        CREATE INDEX idx_fatture_anno ON fatture(anno);
+        CREATE INDEX idx_righe_fattura ON righe_fattura(fattura_id);
+        """
+    )
+
+
+# Lista ordinata delle migrazioni. L'indice+1 e' la versione risultante.
+MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
+    _m001_schema_iniziale,
+]
+
+
+def _get_schema_version(conn: sqlite3.Connection) -> int:
+    """Legge la versione di schema tramite ``PRAGMA user_version``.
+
+    Usiamo ``user_version`` (intero interno del file SQLite) invece di una
+    tabella dedicata: e' atomico, non richiede setup e non rischia di essere
+    letto prima della sua stessa creazione.
+    """
+    row = conn.execute("PRAGMA user_version").fetchone()
+    return int(row[0])
+
+
+def _set_schema_version(conn: sqlite3.Connection, version: int) -> None:
+    # PRAGMA non accetta parametri bindati: la versione e' un int controllato.
+    conn.execute(f"PRAGMA user_version = {int(version)}")
+
+
+def init_db(db_path: Path | str | None = None) -> None:
+    """Crea/aggiorna il DB applicando le migrazioni mancanti in transazione."""
+    conn = get_conn(db_path)
+    try:
+        current = _get_schema_version(conn)
+        target = len(MIGRATIONS)
+        for version in range(current, target):
+            with conn:  # transazione: commit se ok, rollback se eccezione
+                MIGRATIONS[version](conn)
+                _set_schema_version(conn, version + 1)
+    finally:
+        conn.close()

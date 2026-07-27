@@ -1,0 +1,13 @@
+# Gestionale Fatturazione Studio Veterinario — dipendenze runtime
+# Versioni pinnate per riproducibilità offline. Tutte pure-Python o wheel senza
+# dipendenze native, per un packaging PyInstaller pulito su Windows.
+fastapi==0.111.0
+uvicorn==0.30.1
+jinja2==3.1.4
+python-multipart==0.0.9
+reportlab==4.2.2
+openpyxl==3.1.5
+
+# --- Solo sviluppo/test (non necessarie all'utente finale) ---
+pytest==8.2.2
+httpx==0.27.0
