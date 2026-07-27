@@ -53,6 +53,13 @@ chiudendo la finestra nera.
 > Vuoi provare subito con dati finti? Vai in **Backup e manutenzione → Carica dati
 > di esempio**.
 
+### Se hai già emesso fatture quest'anno (con altri mezzi)
+In **Impostazioni → Continuità numerazione** indica il **prossimo numero** da usare
+(es. `24`), così la prima fattura sarà `24/2026` e la numerazione prosegue senza
+doppioni. Si può impostare **solo prima** di emettere la prima fattura dell'anno nel
+gestionale. Le vecchie fatture in PDF/Word restano valide dove sono: **tienile come
+archivio** (non serve reinserirle nel gestionale).
+
 ## 4. Emettere una fattura
 
 **Fatture → Nuova fattura**:

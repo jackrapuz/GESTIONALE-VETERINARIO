@@ -2,7 +2,9 @@
 import pytest
 
 from app.db import get_conn, init_db
-from app.numerazione import assegna_numero, formatta_numero, verifica_continuita
+from app.numerazione import (
+    assegna_numero, formatta_numero, imposta_partenza, verifica_continuita,
+)
 
 
 @pytest.fixture()
@@ -61,3 +63,16 @@ def test_formatta_numero():
     assert formatta_numero(7, 2026, "FT-{anno}-{n}") == "FT-2026-7"
     # formato errato -> fallback sicuro
     assert formatta_numero(5, 2026, "{sbagliato}") == "5/2026"
+
+
+def test_imposta_partenza(conn):
+    # continuita' da una numerazione preesistente: la prima sara' 24/2026
+    imposta_partenza(conn, 2026, 24)
+    assert assegna_numero(conn, 2026) == 24
+    assert assegna_numero(conn, 2026) == 25
+
+
+def test_imposta_partenza_bloccata_se_esistono_documenti(conn):
+    _inserisci_fattura(conn, 2026, 1)
+    with pytest.raises(ValueError):
+        imposta_partenza(conn, 2026, 50)

@@ -69,4 +69,22 @@
 
   <div class="azioni"><button class="btn" type="submit">Salva</button></div>
 </form>
+
+<h2 class="sez" style="margin-top:2rem">Continuità numerazione (impostazione iniziale)</h2>
+<form class="scheda" method="post" action="/impostazioni/numerazione" style="max-width:760px">
+  <p class="muted" style="margin-top:0">Se hai già emesso fatture quest'anno con altri mezzi,
+    indica qui il <strong>prossimo numero</strong> da usare, così la numerazione prosegue senza
+    doppioni. Modificabile solo finché non emetti la prima fattura {{ anno }} nel gestionale.</p>
+  <div class="riga">
+    <div class="campo"><label>Prossima fattura per l'anno {{ anno }}</label>
+      <input type="number" min="1" name="prossimo_numero" value="{{ prossimo_numero }}"
+             {{ 'disabled' if numerazione_bloccata }}></div>
+  </div>
+  {% if numerazione_bloccata %}
+  <p class="muted">Numerazione già avviata per il {{ anno }}: non più modificabile
+    (la prossima sarà <strong>{{ prossimo_numero }}/{{ anno }}</strong>).</p>
+  {% else %}
+  <div class="azioni"><button class="btn" type="submit">Imposta numero di partenza</button></div>
+  {% endif %}
+</form>
 {% endblock %}
