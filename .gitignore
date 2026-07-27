@@ -17,6 +17,7 @@ env/
 build/
 dist/
 *.spec
+!Gestionale.spec
 
 # Sistema / editor
 Thumbs.db
