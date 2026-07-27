@@ -9,12 +9,15 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from app.calcolo import RigaInput, calcola_fattura, dec, q2
+from app.calcolo import RigaInput, dec, q2
 from app.db import get_conn
-from app.fatturazione import denominazione_cliente, emetti_fattura
+from app.fatturazione import (
+    denominazione_cliente, emetti_fattura, gruppi_iva_da_righe, leggi_fattura,
+)
 from app.numerazione import verifica_continuita
+from app.pdf_fattura import genera_pdf_fattura
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
 
@@ -48,37 +51,6 @@ def _prestazioni_attive(conn) -> list[dict]:
         "FROM prestazioni WHERE attiva=1 ORDER BY descrizione"
     ).fetchall()
     return [dict(r) for r in righe]
-
-
-def _leggi_fattura(conn, fid: int) -> dict | None:
-    row = conn.execute("SELECT * FROM fatture WHERE id=?", (fid,)).fetchone()
-    if row is None:
-        return None
-    fattura = dict(row)
-    fattura["righe"] = [
-        dict(r) for r in conn.execute(
-            "SELECT * FROM righe_fattura WHERE fattura_id=? ORDER BY ordine, id", (fid,)
-        ).fetchall()
-    ]
-    return fattura
-
-
-def _gruppi_iva_da_righe(righe: list[dict], enpav_pct) -> list[dict]:
-    """Ricostruisce la ripartizione IVA per aliquota dai dati salvati (per la stampa/dettaglio)."""
-    inp = [
-        RigaInput(
-            descrizione=r["descrizione"], quantita=1,
-            prezzo_unitario=r["imponibile_riga"], aliquota_iva=r["aliquota_iva"],
-            tipo_spesa_ts=r["tipo_spesa_ts"],
-        )
-        for r in righe
-    ]
-    ris = calcola_fattura(inp, enpav_pct=enpav_pct)
-    return [
-        {"aliquota": str(g.aliquota), "imponibile": str(g.imponibile),
-         "enpav": str(g.enpav), "base_iva": str(g.base_iva), "iva": str(g.iva)}
-        for g in ris.gruppi_iva
-    ]
 
 
 # ---------------------------------------------------------------------------
@@ -221,17 +193,37 @@ async def crea(request: Request):
 def dettaglio(request: Request, fid: int):
     conn = get_conn()
     try:
-        fattura = _leggi_fattura(conn, fid)
+        fattura = leggi_fattura(conn, fid)
         studio = leggi_studio(conn)
     finally:
         conn.close()
     if fattura is None:
         return RedirectResponse("/fatture?msg=Documento+non+trovato", status_code=303)
-    gruppi = _gruppi_iva_da_righe(fattura["righe"], fattura["enpav_pct"])
+    gruppi = gruppi_iva_da_righe(fattura["righe"], fattura["enpav_pct"])
     return templates.TemplateResponse(
         request, "fattura_dettaglio.html",
         {"titolo": fattura["numero_visualizzato"], "f": fattura, "studio": studio,
          "gruppi": gruppi, "modalita": MODALITA_PAGAMENTO},
+    )
+
+
+@router.get("/fatture/{fid}/pdf")
+def pdf(fid: int):
+    conn = get_conn()
+    try:
+        fattura = leggi_fattura(conn, fid)
+        studio = leggi_studio(conn)
+    finally:
+        conn.close()
+    if fattura is None:
+        return RedirectResponse("/fatture?msg=Documento+non+trovato", status_code=303)
+    gruppi = gruppi_iva_da_righe(fattura["righe"], fattura["enpav_pct"])
+    contenuto = genera_pdf_fattura(fattura, studio, gruppi)
+    nome = f"{fattura['tipo_documento']}_{fattura['numero_visualizzato'].replace('/', '-')}.pdf"
+    return Response(
+        content=contenuto,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nome}"'},
     )
 
 
@@ -275,7 +267,7 @@ def nota_credito(fid: int):
     """
     conn = get_conn()
     try:
-        originale = _leggi_fattura(conn, fid)
+        originale = leggi_fattura(conn, fid)
         studio = leggi_studio(conn)
         if originale is None:
             return RedirectResponse("/fatture?msg=Documento+non+trovato", status_code=303)

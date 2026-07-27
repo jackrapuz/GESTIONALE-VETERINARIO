@@ -32,13 +32,17 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
     # Router delle sezioni (registrati man mano che vengono implementati).
-    from app.routers import clienti, fatture, impostazioni, pazienti, prestazioni
+    from app.routers import (
+        backup, clienti, export, fatture, impostazioni, pazienti, prestazioni,
+    )
 
     app.include_router(impostazioni.router)
     app.include_router(clienti.router)
     app.include_router(pazienti.router)
     app.include_router(prestazioni.router)
     app.include_router(fatture.router)
+    app.include_router(export.router)
+    app.include_router(backup.router)
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):

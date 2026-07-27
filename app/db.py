@@ -11,12 +11,18 @@ Principi:
 from __future__ import annotations
 
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Callable
 
-# Radice del progetto = cartella che contiene "app/". Calcolata dal file corrente
-# cosi' funziona sia in sviluppo sia dentro l'eseguibile PyInstaller.
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Radice per la cartella "dati":
+# - in sviluppo: la cartella che contiene "app/";
+# - come .exe PyInstaller: la cartella dell'eseguibile (i dati devono restare
+#   ACCANTO all'exe e persistere, NON nella cartella temporanea _MEIPASS).
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
 DATI_DIR = BASE_DIR / "dati"
 DB_PATH = DATI_DIR / "gestionale.db"
 

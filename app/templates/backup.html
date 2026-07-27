@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titolo %}Backup e manutenzione{% endblock %}
+{% block contenuto %}
+<h1>Backup e manutenzione</h1>
+
+<div class="card-grid">
+  <div class="card">
+    <h2>Backup</h2>
+    <p>Database attuale: <strong>{{ dim_kb }} KB</strong>.</p>
+    <p class="azioni" style="flex-wrap:wrap">
+      <form method="post" action="/backup/crea"><button class="btn" type="submit">Crea backup</button></form>
+      <a class="btn secondario" href="/backup/scarica">Scarica copia (.db)</a>
+    </p>
+    <p class="muted">Conserva la copia scaricata in un luogo sicuro (chiavetta, altro disco).</p>
+  </div>
+
+  <div class="card">
+    <h2>Ripristina da file</h2>
+    <form method="post" action="/backup/ripristina-upload" enctype="multipart/form-data"
+          onsubmit="return confirm('Il ripristino sovrascrive i dati attuali (verrà creata una copia di sicurezza). Procedere?');">
+      <div class="campo"><label>File di backup (.db)</label><input type="file" name="file" accept=".db" required></div>
+      <div class="azioni"><button class="btn pericolo" type="submit">Ripristina</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Dati di esempio</h2>
+    <p>Popola clienti, pazienti (equini), listino e fatture di prova (solo se vuoti).</p>
+    <form method="post" action="/dati-esempio"
+          onsubmit="return confirm('Caricare i dati di esempio nelle tabelle vuote?');">
+      <div class="azioni"><button class="btn secondario" type="submit">Carica dati di esempio</button></div>
+    </form>
+  </div>
+</div>
+
+<h2 class="sez">Backup disponibili</h2>
+{% if backups %}
+<table>
+  <thead><tr><th>Nome file</th><th>Data</th><th class="num">Dim. (KB)</th><th></th></tr></thead>
+  <tbody>
+    {% for b in backups %}
+    <tr>
+      <td>{{ b.nome }}</td>
+      <td>{{ b.data }}</td>
+      <td class="num">{{ b.dimensione_kb }}</td>
+      <td>
+        <form method="post" action="/backup/ripristina"
+              onsubmit="return confirm('Ripristinare da {{ b.nome }}? I dati attuali verranno sovrascritti (con copia di sicurezza).');">
+          <input type="hidden" name="nome_backup" value="{{ b.nome }}">
+          <button class="btn secondario" type="submit">Ripristina</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nessun backup ancora creato. I backup sono salvati nella cartella <code>dati/backup</code>.</p>
+{% endif %}
+{% endblock %}

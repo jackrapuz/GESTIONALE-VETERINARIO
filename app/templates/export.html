@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titolo %}Esportazioni{% endblock %}
+{% block contenuto %}
+<h1>Esportazioni</h1>
+
+<form method="get" action="/export" class="scheda" style="max-width:720px">
+  <div class="riga">
+    <div class="campo"><label>Dal</label><input type="date" name="dal" value="{{ dal }}"></div>
+    <div class="campo"><label>Al</label><input type="date" name="al" value="{{ al }}"></div>
+    <div class="campo" style="flex:0 0 auto; justify-content:flex-end">
+      <button class="btn" type="submit">Aggiorna periodo</button></div>
+  </div>
+  <p class="muted">Il periodo si applica a entrambe le esportazioni sottostanti.</p>
+</form>
+
+<div class="card-grid" style="margin-top:1.2rem">
+  <div class="card">
+    <h2>Sistema Tessera Sanitaria</h2>
+    <p>Spese veterinarie, filtrate per <strong>data di pagamento</strong>.</p>
+    <p class="muted">Tracciato: <code>{{ ts_versione }}</code></p>
+    <p>Documenti conformi: <strong>{{ ts_ok }}</strong> · scarti: <strong>{{ ts_scarti }}</strong></p>
+    <p class="azioni">
+      <a class="btn" href="/export/ts.csv?dal={{ dal }}&al={{ al }}">Scarica CSV TS</a>
+      {% if ts_scarti %}<a class="btn secondario" href="/export/ts-scarti.csv?dal={{ dal }}&al={{ al }}">Report scarti</a>{% endif %}
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Commercialista</h2>
+    <p>Registro fatture per <strong>data di emissione</strong> + riepilogo IVA.</p>
+    <p>Documenti nel periodo: <strong>{{ n_registro }}</strong></p>
+    <p class="azioni" style="flex-wrap:wrap">
+      <a class="btn" href="/export/commercialista.xlsx?dal={{ dal }}&al={{ al }}">Excel</a>
+      <a class="btn secondario" href="/export/commercialista.csv?dal={{ dal }}&al={{ al }}">CSV</a>
+      <a class="btn secondario" href="/export/commercialista-pdf.zip?dal={{ dal }}&al={{ al }}">Copie PDF (ZIP)</a>
+    </p>
+  </div>
+</div>
+
+{% if ts_dettaglio_scarti %}
+<h2 class="sez">Scarti Sistema TS nel periodo</h2>
+<table>
+  <thead><tr><th>Documento</th><th>Motivi</th></tr></thead>
+  <tbody>
+    {% for numero, motivi in ts_dettaglio_scarti %}
+    <tr><td>{{ numero }}</td><td>{{ motivi|join('; ') }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

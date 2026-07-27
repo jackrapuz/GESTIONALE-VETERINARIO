@@ -11,3 +11,5 @@ openpyxl==3.1.5
 # --- Solo sviluppo/test (non necessarie all'utente finale) ---
 pytest==8.2.2
 httpx==0.27.0
+# PyInstaller (per creare Gestionale.exe) NON e' qui di proposito: lo installa
+# separatamente costruisci_exe.bat, cosi' l'installazione dell'utente resta leggera.

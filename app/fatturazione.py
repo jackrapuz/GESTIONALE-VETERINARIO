@@ -16,6 +16,43 @@ from app.calcolo import RigaInput, RisultatoFattura, calcola_fattura
 from app.numerazione import formatta_numero, prossimo_numero
 
 
+def leggi_fattura(conn: sqlite3.Connection, fid: int) -> dict | None:
+    """Legge una fattura con le sue righe (ordinate). ``None`` se inesistente."""
+    row = conn.execute("SELECT * FROM fatture WHERE id=?", (fid,)).fetchone()
+    if row is None:
+        return None
+    fattura = dict(row)
+    fattura["righe"] = [
+        dict(r) for r in conn.execute(
+            "SELECT * FROM righe_fattura WHERE fattura_id=? ORDER BY ordine, id", (fid,)
+        ).fetchall()
+    ]
+    return fattura
+
+
+def gruppi_iva_da_righe(righe: list[dict], enpav_pct) -> list[dict]:
+    """Ricostruisce la ripartizione IVA per aliquota dai dati salvati.
+
+    Usato per stampa/dettaglio/export: ripercorre il calcolo partendo dagli
+    imponibili di riga gia' memorizzati, cosi' i totali combaciano con quelli
+    salvati sulla fattura.
+    """
+    inp = [
+        RigaInput(
+            descrizione=r["descrizione"], quantita=1,
+            prezzo_unitario=r["imponibile_riga"], aliquota_iva=r["aliquota_iva"],
+            tipo_spesa_ts=r["tipo_spesa_ts"],
+        )
+        for r in righe
+    ]
+    ris = calcola_fattura(inp, enpav_pct=enpav_pct)
+    return [
+        {"aliquota": str(g.aliquota), "imponibile": str(g.imponibile),
+         "enpav": str(g.enpav), "base_iva": str(g.base_iva), "iva": str(g.iva)}
+        for g in ris.gruppi_iva
+    ]
+
+
 def denominazione_cliente(cli: dict | sqlite3.Row) -> str:
     """Nome da mostrare/salvare: ragione sociale (giuridica) o 'Cognome Nome'."""
     cli = dict(cli)
