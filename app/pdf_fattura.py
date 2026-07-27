@@ -76,8 +76,11 @@ def _intestazione_studio(studio: dict, ss) -> list:
     return righe
 
 
+_TITOLI = {"nota_credito": "NOTA DI CREDITO", "proforma": "PROFORMA"}
+
+
 def _blocco_cliente(f: dict, ss) -> Table:
-    tipo = "NOTA DI CREDITO" if f["tipo_documento"] == "nota_credito" else "FATTURA"
+    tipo = _TITOLI.get(f["tipo_documento"], "FATTURA")
     sinistra = [
         Paragraph("Cliente", ss["Etichetta"]),
         Paragraph(f["cli_denominazione"] or "—", ss["Corpo"]),
@@ -213,12 +216,16 @@ def genera_pdf_fattura(f: dict, studio: dict, gruppi: list[dict]) -> bytes:
         story.append(Spacer(1, 4 * mm))
         story.append(Paragraph(f"<b>Note:</b> {f['note']}", ss["Piccolo"]))
 
-    # Nota fiscale: prestazioni sanitarie -> fattura non elettronica.
+    # Nota in calce: diversa per proforma (non fiscale) o fattura cartacea.
     story.append(Spacer(1, 8 * mm))
-    story.append(Paragraph(
-        "Documento non soggetto a fatturazione elettronica via SdI (prestazioni "
-        "sanitarie i cui dati confluiscono nel Sistema Tessera Sanitaria).",
-        ss["Piccolo"]))
+    if f["tipo_documento"] == "proforma":
+        validita = f.get("validita_giorni") or 30
+        nota = (f"Preventivo non fiscale, non valido ai fini IVA. "
+                f"Validita': {validita} giorni dalla data di emissione.")
+    else:
+        nota = ("Documento non soggetto a fatturazione elettronica via SdI (prestazioni "
+                "sanitarie i cui dati confluiscono nel Sistema Tessera Sanitaria).")
+    story.append(Paragraph(nota, ss["Piccolo"]))
 
     doc.build(story)
     return buf.getvalue()

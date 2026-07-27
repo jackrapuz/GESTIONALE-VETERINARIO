@@ -11,6 +11,14 @@
   </h1>
   <div class="azioni">
     <a class="btn" href="/fatture/{{ f.id }}/pdf" target="_blank">Stampa PDF</a>
+    {% if contatti.email %}
+    <form method="post" action="/fatture/{{ f.id }}/invia-email">
+      <button class="btn secondario" type="submit" title="Invia il PDF a {{ contatti.email }}">Invia email</button>
+    </form>
+    {% endif %}
+    {% if whatsapp %}
+    <a class="btn secondario" href="{{ whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>
+    {% endif %}
     <a class="btn secondario" href="/fatture">← Elenco</a>
   </div>
 </div>

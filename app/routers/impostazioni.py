@@ -9,13 +9,17 @@ from app.templating import templates
 
 router = APIRouter()
 
-# Campi editabili della tabella studio (esclusa la PK id).
+# Campi editabili di testo della tabella studio (esclusa la PK id).
 _CAMPI = [
     "denominazione", "nome", "cognome", "codice_fiscale", "partita_iva",
     "via", "cap", "citta", "prov", "email", "telefono", "iban", "regime",
     "n_iscrizione_albo", "enpav_pct", "iva_default_pct", "formato_numerazione",
     "testo_dicitura_opposizione_ts", "logo_path",
+    "smtp_host", "smtp_porta", "smtp_sicurezza", "smtp_utente", "smtp_password",
+    "smtp_mittente",
 ]
+# Campi booleani (checkbox).
+_CHECKBOX = ["invio_auto_email"]
 
 
 def leggi_studio(conn) -> dict:
@@ -38,8 +42,10 @@ def form_impostazioni(request: Request):
 @router.post("/impostazioni")
 async def salva_impostazioni(request: Request):
     form = await request.form()
+    colonne = _CAMPI + _CHECKBOX
     valori = [str(form.get(c, "")).strip() for c in _CAMPI]
-    set_clause = ", ".join(f"{c}=?" for c in _CAMPI)
+    valori += [1 if form.get(c) else 0 for c in _CHECKBOX]
+    set_clause = ", ".join(f"{c}=?" for c in colonne)
     conn = get_conn()
     try:
         with conn:

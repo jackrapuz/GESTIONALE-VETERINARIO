@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block titolo %}{{ p.numero_visualizzato }}{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>Preventivo n. {{ p.numero_visualizzato }}
+    {% if p.stato == 'convertita' %}<span class="badge ok">Convertito</span>{% else %}<span class="badge">Bozza</span>{% endif %}
+  </h1>
+  <div class="azioni">
+    <a class="btn" href="/preventivi/{{ p.id }}/pdf" target="_blank">Stampa PDF</a>
+    {% if contatti.email %}
+    <form method="post" action="/preventivi/{{ p.id }}/invia-email">
+      <button class="btn secondario" type="submit" title="Invia a {{ contatti.email }}">Invia email</button></form>
+    {% endif %}
+    {% if whatsapp %}<a class="btn secondario" href="{{ whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
+    <a class="btn secondario" href="/preventivi">← Elenco</a>
+  </div>
+</div>
+
+<div class="scheda" style="max-width:960px">
+  <div class="riga">
+    <div class="campo"><label>Cliente</label><div>{{ p.cli_denominazione }}</div>
+      <div class="muted">{{ p.cli_indirizzo }}</div></div>
+    <div class="campo"><label>Data</label><div>{{ p.data_emissione|data_it }}</div></div>
+    <div class="campo"><label>Validità</label><div>{{ p.validita_giorni }} giorni</div></div>
+  </div>
+
+  <table class="righe-fattura" style="margin-top:1rem">
+    <thead><tr><th>Descrizione</th><th class="num">Q.tà</th><th class="num">Prezzo €</th>
+      <th class="num">Sc. %</th><th class="num">IVA %</th><th class="num">Imponibile</th></tr></thead>
+    <tbody>
+      {% for r in p.righe %}
+      <tr><td>{{ r.descrizione }}</td><td class="num">{{ r.quantita }}</td>
+        <td class="num">{{ r.prezzo_unitario|euro }}</td><td class="num">{{ r.sconto_riga_pct }}</td>
+        <td class="num">{{ r.aliquota_iva }}</td><td class="num">{{ r.imponibile_riga|euro }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="riepilogo" style="margin-top:1rem">
+    {% for g in gruppi %}
+    <div><span>Imponibile (IVA {{ g.aliquota }}%)</span><b>{{ g.imponibile|euro }}</b></div>
+    <div><span>Contributo ENPAV {{ p.enpav_pct }}%</span><b>{{ g.enpav|euro }}</b></div>
+    <div><span>Base imponibile IVA {{ g.aliquota }}%</span><b>{{ g.base_iva|euro }}</b></div>
+    <div><span>IVA {{ g.aliquota }}%</span><b>{{ g.iva|euro }}</b></div>
+    {% endfor %}
+    <div class="tot"><span>Totale documento</span><b>{{ p.totale_documento|euro }}</b></div>
+    {% if p.ritenuta_applicata %}
+    <div><span>Ritenuta d'acconto {{ p.ritenuta_pct }}%</span><b>-{{ p.ritenuta_importo|euro }}</b></div>
+    <div class="tot"><span>Netto a pagare</span><b>{{ p.netto_a_pagare|euro }}</b></div>
+    {% endif %}
+  </div>
+
+  {% if p.note %}<p class="muted"><strong>Note:</strong> {{ p.note }}</p>{% endif %}
+  <p class="muted">Documento non fiscale (preventivo), non valido ai fini IVA.</p>
+  {% if p.stato == 'convertita' %}
+  <p class="muted">Convertito nella fattura
+    <a href="/fatture/{{ p.fattura_generata_id }}">#{{ p.fattura_generata_id }}</a>.</p>
+  {% endif %}
+</div>
+
+{% if p.stato != 'convertita' %}
+<div class="azioni" style="margin-top:1rem">
+  <form method="post" action="/preventivi/{{ p.id }}/converti"
+        onsubmit="return confirm('Convertire il preventivo in fattura? Verrà emesso un documento fiscale.');">
+    <button class="btn" type="submit">Converti in fattura</button></form>
+  <form method="post" action="/preventivi/{{ p.id }}/elimina"
+        onsubmit="return confirm('Eliminare il preventivo?');">
+    <button class="btn pericolo" type="submit">Elimina</button></form>
+</div>
+{% endif %}
+{% endblock %}
