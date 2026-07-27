@@ -1,8 +1,69 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
 {% block titolo %}Home{% endblock %}
 {% block contenuto %}
-<h1>Benvenuto</h1>
-<p>Gestionale offline per la fatturazione dello studio veterinario.</p>
+
+<section class="hero">
+  {{ ui.ferro('ferro-bg') }}
+  <p class="eyebrow">Cruscotto · {{ anno }}</p>
+  <h1>{{ studio_nome }}</h1>
+  <p class="sub">Riepilogo dell'attività dell'anno in corso.</p>
+  <div class="stat-row">
+    <div class="stat accento">
+      <span class="k">Fatturato {{ anno }}</span>
+      <div class="v">{{ fatturato|euro }} <small>€</small></div>
+    </div>
+    <div class="stat">
+      <span class="k">Da incassare</span>
+      <div class="v">{{ da_incassare|euro }} <small>€</small></div>
+    </div>
+    <div class="stat">
+      <span class="k">Fatture emesse</span>
+      <div class="v">{{ n_fatture }}</div>
+    </div>
+    <div class="stat">
+      <span class="k">Clienti · Pazienti</span>
+      <div class="v">{{ n_clienti }} <small>· {{ n_pazienti }}</small></div>
+    </div>
+  </div>
+</section>
+
+<div class="azioni" style="margin-bottom: 1.6rem">
+  <a class="btn" href="/fatture/nuova">+ Nuova fattura</a>
+  <a class="btn secondario" href="/clienti/nuovo">Nuovo cliente</a>
+  <a class="btn secondario" href="/pazienti/nuovo">Nuovo paziente</a>
+  <a class="btn secondario" href="/export">Esportazioni</a>
+</div>
+
+<div class="sezione-titolo">{{ ui.ferro() }}<h2>Ultimi documenti</h2></div>
+{% if ultime %}
+<div class="tabella-scroll">
+<table>
+  <thead><tr><th>Numero</th><th>Data</th><th>Cliente</th><th class="num">Totale</th><th>Stato</th></tr></thead>
+  <tbody>
+    {% for f in ultime %}
+    <tr>
+      <td><a href="/fatture/{{ f.id }}">{{ f.numero_visualizzato }}</a>
+        {% if f.tipo_documento == 'nota_credito' %}<span class="badge">NC</span>{% endif %}</td>
+      <td>{{ f.data_emissione|data_it }}</td>
+      <td>{{ f.cli_denominazione }}</td>
+      <td class="num">{{ f.totale_documento|euro }}</td>
+      <td>
+        {% if f.stato == 'incassata' %}<span class="badge ok">Incassata</span>
+        {% elif f.stato == 'annullata' %}<span class="badge err">Annullata</span>
+        {% else %}<span class="badge">Emessa</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Ancora nessun documento. Inizia da <a href="/fatture/nuova">Nuova fattura</a>
+  oppure carica dei <a href="/backup">dati di esempio</a>.</p>
+{% endif %}
+
+<div class="sezione-titolo">{{ ui.ferro() }}<h2>Aree del gestionale</h2></div>
 <div class="card-grid">
   <a class="card" href="/clienti"><h2>Clienti</h2><p>Anagrafica proprietari</p></a>
   <a class="card" href="/pazienti"><h2>Pazienti</h2><p>Animali (equini e altro)</p></a>

@@ -7,16 +7,18 @@
   <link rel="stylesheet" href="/static/css/stile.css">
 </head>
 <body>
+  {% import "_ui.html" as ui with context %}
+  {% set p = request.url.path %}
   <header class="topbar">
-    <a class="brand" href="/">🐴 Gestionale Veterinario</a>
+    <a class="brand" href="/">{{ ui.ferro() }} Studio Veterinario</a>
     <nav>
-      <a href="/clienti">Clienti</a>
-      <a href="/pazienti">Pazienti</a>
-      <a href="/listino">Listino</a>
-      <a href="/fatture">Fatture</a>
-      <a href="/export">Esportazioni</a>
-      <a href="/backup">Backup</a>
-      <a href="/impostazioni">Impostazioni</a>
+      <a href="/clienti"      class="{{ 'attivo' if p.startswith('/clienti') }}">Clienti</a>
+      <a href="/pazienti"     class="{{ 'attivo' if p.startswith('/pazienti') }}">Pazienti</a>
+      <a href="/listino"      class="{{ 'attivo' if p.startswith('/listino') }}">Listino</a>
+      <a href="/fatture"      class="{{ 'attivo' if p.startswith('/fatture') }}">Fatture</a>
+      <a href="/export"       class="{{ 'attivo' if p.startswith('/export') }}">Esportazioni</a>
+      <a href="/backup"       class="{{ 'attivo' if p.startswith('/backup') }}">Backup</a>
+      <a href="/impostazioni" class="{{ 'attivo' if p.startswith('/impostazioni') }}">Impostazioni</a>
     </nav>
   </header>
 
@@ -30,7 +32,7 @@
     {% block contenuto %}{% endblock %}
   </main>
 
-  <footer class="footer">Dati salvati solo su questo computer · nessuna connessione a Internet</footer>
+  <footer class="footer">{{ ui.ferro() }} Dati salvati solo su questo computer · nessuna connessione a Internet</footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>
