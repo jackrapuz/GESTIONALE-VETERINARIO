@@ -71,6 +71,47 @@ def assegna_numero(
         raise
 
 
+def numero_corrente(conn: sqlite3.Connection, anno: int, tipo_documento: str = "fattura") -> int:
+    """Ultimo numero assegnato per anno/tipo (0 se nessuno)."""
+    row = conn.execute(
+        "SELECT ultimo_numero FROM numerazione WHERE anno=? AND tipo_documento=?",
+        (anno, tipo_documento)).fetchone()
+    return int(row["ultimo_numero"]) if row else 0
+
+
+def esistono_documenti(conn: sqlite3.Connection, anno: int, tipo_documento: str = "fattura") -> bool:
+    """True se in ``fatture`` esiste gia' un documento per anno/tipo."""
+    return conn.execute(
+        "SELECT COUNT(*) FROM fatture WHERE anno=? AND tipo_documento=?",
+        (anno, tipo_documento)).fetchone()[0] > 0
+
+
+def imposta_partenza(
+    conn: sqlite3.Connection, anno: int, prossimo: int, tipo_documento: str = "fattura"
+) -> None:
+    """Imposta il PROSSIMO numero da assegnare per anno/tipo (continuita' iniziale).
+
+    Consentito solo se NON esistono ancora documenti per quell'anno/tipo: serve a
+    proseguire da una numerazione preesistente (es. fatture fatte prima con altri
+    mezzi), non a modificare a ritroso una sequenza gia' avviata nel gestionale.
+    """
+    if prossimo < 1:
+        raise ValueError("Il numero di partenza deve essere almeno 1.")
+    if esistono_documenti(conn, anno, tipo_documento):
+        raise ValueError(
+            "Ci sono gia' documenti di quest'anno nel gestionale: la numerazione "
+            "non e' piu' modificabile.")
+    ultimo = prossimo - 1
+    with conn:
+        cur = conn.execute(
+            "UPDATE numerazione SET ultimo_numero=? WHERE anno=? AND tipo_documento=?",
+            (ultimo, anno, tipo_documento))
+        if cur.rowcount == 0:
+            conn.execute(
+                "INSERT INTO numerazione (anno, tipo_documento, ultimo_numero) VALUES (?,?,?)",
+                (anno, tipo_documento, ultimo))
+
+
 def verifica_continuita(
     conn: sqlite3.Connection, anno: int, tipo_documento: str = "fattura"
 ) -> list[int]:
