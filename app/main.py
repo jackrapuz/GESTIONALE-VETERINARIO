@@ -75,6 +75,7 @@ def create_app() -> FastAPI:
     # Router delle sezioni (registrati man mano che vengono implementati).
     from app.routers import (
         backup, clienti, export, fatture, impostazioni, pazienti, prestazioni,
+        preventivi,
     )
 
     app.include_router(impostazioni.router)
@@ -82,6 +83,7 @@ def create_app() -> FastAPI:
     app.include_router(pazienti.router)
     app.include_router(prestazioni.router)
     app.include_router(fatture.router)
+    app.include_router(preventivi.router)
     app.include_router(export.router)
     app.include_router(backup.router)
 

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block titolo %}Preventivi{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>Preventivi</h1>
+  <a class="btn" href="/preventivi/nuovo">+ Nuovo preventivo</a>
+</div>
+
+{% if proforme %}
+<div class="tabella-scroll">
+<table>
+  <thead><tr><th>Numero</th><th>Data</th><th>Cliente</th><th class="num">Totale</th><th>Stato</th></tr></thead>
+  <tbody>
+    {% for p in proforme %}
+    <tr>
+      <td><a href="/preventivi/{{ p.id }}">{{ p.numero_visualizzato }}</a></td>
+      <td>{{ p.data_emissione|data_it }}</td>
+      <td>{{ p.cli_denominazione }}</td>
+      <td class="num">{{ p.totale_documento|euro }}</td>
+      <td>{% if p.stato == 'convertita' %}<span class="badge ok">Convertito</span>
+          {% else %}<span class="badge">Bozza</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Nessun preventivo. Inizia da <a href="/preventivi/nuovo">Nuovo preventivo</a>.</p>
+{% endif %}
+{% endblock %}

@@ -187,9 +187,82 @@ def _m001_schema_iniziale(conn: sqlite3.Connection) -> None:
     )
 
 
+def _m002_proforma_e_invio(conn: sqlite3.Connection) -> None:
+    """v2: preventivi/proforma, configurazione invio (SMTP) e tracce d'invio.
+
+    - Nuove tabelle ``proforme`` / ``righe_proforma`` (documenti NON fiscali,
+      con colonne allineate a ``fatture`` cosi' PDF e calcoli si riusano).
+    - Colonne SMTP su ``studio`` (invio email; credenziali solo locali).
+    - Colonne su ``fatture`` per collegare la proforma di origine e tracciare
+      l'eventuale invio email.
+    """
+    conn.executescript(
+        """
+        CREATE TABLE proforme (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            anno INTEGER NOT NULL,
+            numero_progressivo INTEGER NOT NULL,
+            numero_visualizzato TEXT NOT NULL,
+            data_emissione TEXT NOT NULL,
+            validita_giorni INTEGER NOT NULL DEFAULT 30,
+            cliente_id INTEGER REFERENCES clienti(id),
+            cli_denominazione TEXT NOT NULL DEFAULT '',
+            cli_codice_fiscale TEXT NOT NULL DEFAULT '',
+            cli_partita_iva TEXT NOT NULL DEFAULT '',
+            cli_indirizzo TEXT NOT NULL DEFAULT '',
+            ritenuta_applicata INTEGER NOT NULL DEFAULT 0,
+            ritenuta_pct TEXT NOT NULL DEFAULT '0.00',
+            enpav_pct TEXT NOT NULL DEFAULT '2.00',
+            imponibile TEXT NOT NULL DEFAULT '0.00',
+            contributo_enpav TEXT NOT NULL DEFAULT '0.00',
+            base_iva TEXT NOT NULL DEFAULT '0.00',
+            iva_totale TEXT NOT NULL DEFAULT '0.00',
+            ritenuta_importo TEXT NOT NULL DEFAULT '0.00',
+            totale_documento TEXT NOT NULL DEFAULT '0.00',
+            netto_a_pagare TEXT NOT NULL DEFAULT '0.00',
+            stato TEXT NOT NULL DEFAULT 'bozza'
+                CHECK (stato IN ('bozza','convertita')),
+            fattura_generata_id INTEGER REFERENCES fatture(id),
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE (anno, numero_progressivo)
+        );
+
+        CREATE TABLE righe_proforma (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            proforma_id INTEGER NOT NULL REFERENCES proforme(id) ON DELETE CASCADE,
+            prestazione_id INTEGER REFERENCES prestazioni(id),
+            descrizione TEXT NOT NULL DEFAULT '',
+            quantita TEXT NOT NULL DEFAULT '1',
+            prezzo_unitario TEXT NOT NULL DEFAULT '0.00',
+            sconto_riga_pct TEXT NOT NULL DEFAULT '0.00',
+            aliquota_iva TEXT NOT NULL DEFAULT '22.00',
+            tipo_spesa_ts TEXT NOT NULL DEFAULT 'SV',
+            imponibile_riga TEXT NOT NULL DEFAULT '0.00',
+            ordine INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX idx_righe_proforma ON righe_proforma(proforma_id);
+
+        ALTER TABLE studio ADD COLUMN smtp_host TEXT NOT NULL DEFAULT '';
+        ALTER TABLE studio ADD COLUMN smtp_porta TEXT NOT NULL DEFAULT '587';
+        ALTER TABLE studio ADD COLUMN smtp_sicurezza TEXT NOT NULL DEFAULT 'starttls';
+        ALTER TABLE studio ADD COLUMN smtp_utente TEXT NOT NULL DEFAULT '';
+        ALTER TABLE studio ADD COLUMN smtp_password TEXT NOT NULL DEFAULT '';
+        ALTER TABLE studio ADD COLUMN smtp_mittente TEXT NOT NULL DEFAULT '';
+        ALTER TABLE studio ADD COLUMN invio_auto_email INTEGER NOT NULL DEFAULT 0;
+
+        ALTER TABLE fatture ADD COLUMN proforma_origine_id INTEGER REFERENCES proforme(id);
+        ALTER TABLE fatture ADD COLUMN email_inviata_at TEXT NOT NULL DEFAULT '';
+
+        CREATE INDEX idx_proforme_anno ON proforme(anno);
+        """
+    )
+
+
 # Lista ordinata delle migrazioni. L'indice+1 e' la versione risultante.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _m001_schema_iniziale,
+    _m002_proforma_e_invio,
 ]
 
 

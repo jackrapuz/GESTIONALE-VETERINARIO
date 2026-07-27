@@ -185,6 +185,9 @@ table.righe-fattura td.imp-riga { text-align: right; font-variant-numeric: tabul
 .riepilogo .tot span { font-family: var(--serif); }
 .riepilogo .tot b { font-family: var(--serif); color: var(--verde); }
 .nota-opposizione { background: var(--warn-bg); border: 1px solid #ecd8a6; padding: .65rem .95rem; border-radius: var(--raggio-s); font-size: .9rem; color: #6d4e14; }
+details.avanzate { border: 1px dashed var(--bordo); border-radius: var(--raggio-s); padding: .3rem .9rem; margin: .4rem 0 1rem; background: #fbfcfa; }
+details.avanzate > summary { cursor: pointer; font-weight: 600; color: var(--verde); padding: .5rem 0; font-size: .9rem; }
+details.avanzate[open] > summary { margin-bottom: .4rem; }
 
 /* ---- Responsivita' ------------------------------------------------------ */
 .tabella-scroll { overflow-x: auto; }

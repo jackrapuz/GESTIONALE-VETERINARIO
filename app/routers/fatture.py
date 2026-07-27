@@ -16,6 +16,9 @@ from app.db import get_conn
 from app.fatturazione import (
     denominazione_cliente, emetti_fattura, gruppi_iva_da_righe, leggi_fattura,
 )
+from app.invio import (
+    ConfigurazioneMancante, invia_email, link_whatsapp, testo_messaggio,
+)
 from app.numerazione import verifica_continuita
 from app.pdf_fattura import genera_pdf_fattura
 from app.routers.impostazioni import leggi_studio
@@ -24,6 +27,32 @@ from app.templating import templates
 router = APIRouter()
 
 MODALITA_PAGAMENTO = ["Bonifico", "Contanti", "Carta", "Assegno", "POS", "Altro"]
+
+
+def _contatti(conn, cliente_id) -> dict:
+    """Email e telefono del cliente (per invio email/WhatsApp)."""
+    if cliente_id is None:
+        return {"email": "", "telefono": ""}
+    row = conn.execute("SELECT email, telefono FROM clienti WHERE id=?", (cliente_id,)).fetchone()
+    return {"email": (row["email"] if row else "") or "",
+            "telefono": (row["telefono"] if row else "") or ""}
+
+
+def _invia_email_documento(conn, studio: dict, f: dict) -> None:
+    """Genera il PDF del documento e lo invia via email al cliente. Puo' sollevare."""
+    gruppi = gruppi_iva_da_righe(f["righe"], f["enpav_pct"])
+    pdf = genera_pdf_fattura(f, studio, gruppi)
+    contatti = _contatti(conn, f["cliente_id"])
+    nome = f"{f['tipo_documento']}_{f['numero_visualizzato'].replace('/', '-')}.pdf"
+    invia_email(
+        studio, destinatario=contatti["email"],
+        oggetto=f"{'Fattura' if f['tipo_documento']=='fattura' else 'Documento'} "
+                f"n. {f['numero_visualizzato']}",
+        corpo=testo_messaggio(studio, f),
+        allegati=[(nome, pdf, "pdf")])
+    with conn:
+        conn.execute("UPDATE fatture SET email_inviata_at=datetime('now','localtime') WHERE id=?",
+                     (f["id"],))
 
 
 # ---------------------------------------------------------------------------
@@ -182,10 +211,23 @@ async def crea(request: Request):
             note=str(form.get("note", "")).strip(),
             formato_numerazione=studio.get("formato_numerazione") or "{n}/{anno}",
         )
+
+        # Invio email opzionale subito dopo l'emissione (richiesto dal form o
+        # impostazione "invio automatico"). Un errore d'invio NON annulla la
+        # fattura, gia' emessa: viene solo segnalato.
+        msg_extra = ""
+        vuole_email = bool(form.get("invia_email")) or int(studio.get("invio_auto_email") or 0)
+        if vuole_email:
+            f = leggi_fattura(conn, esito["id"])
+            try:
+                _invia_email_documento(conn, studio, f)
+                msg_extra = "+e+inviata+via+email"
+            except (ConfigurazioneMancante, OSError) as e:
+                msg_extra = f"+(email+non+inviata:+{str(e)[:60]})"
     finally:
         conn.close()
     return RedirectResponse(
-        f"/fatture/{esito['id']}?msg=Fattura+{esito['numero_visualizzato']}+emessa",
+        f"/fatture/{esito['id']}?msg=Fattura+{esito['numero_visualizzato']}+emessa{msg_extra}",
         status_code=303)
 
 
@@ -200,10 +242,18 @@ def dettaglio(request: Request, fid: int):
     if fattura is None:
         return RedirectResponse("/fatture?msg=Documento+non+trovato", status_code=303)
     gruppi = gruppi_iva_da_righe(fattura["righe"], fattura["enpav_pct"])
+    conn2 = get_conn()
+    try:
+        contatti = _contatti(conn2, fattura["cliente_id"])
+    finally:
+        conn2.close()
+    wa = link_whatsapp(contatti["telefono"], testo_messaggio(studio, fattura)) if contatti["telefono"] else ""
     return templates.TemplateResponse(
         request, "fattura_dettaglio.html",
         {"titolo": fattura["numero_visualizzato"], "f": fattura, "studio": studio,
-         "gruppi": gruppi, "modalita": MODALITA_PAGAMENTO},
+         "gruppi": gruppi, "modalita": MODALITA_PAGAMENTO,
+         "contatti": contatti, "whatsapp": wa,
+         "smtp_ok": bool((studio.get("smtp_host") or "").strip())},
     )
 
 
@@ -225,6 +275,24 @@ def pdf(fid: int):
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{nome}"'},
     )
+
+
+@router.post("/fatture/{fid}/invia-email")
+def invia_email_route(fid: int):
+    conn = get_conn()
+    try:
+        f = leggi_fattura(conn, fid)
+        studio = leggi_studio(conn)
+        if f is None:
+            return RedirectResponse("/fatture?msg=Documento+non+trovato", status_code=303)
+        try:
+            _invia_email_documento(conn, studio, f)
+            msg = f"Email+inviata+a+{_contatti(conn, f['cliente_id'])['email']}"
+        except (ConfigurazioneMancante, OSError) as e:
+            msg = f"Errore+invio:+{str(e)[:80]}"
+    finally:
+        conn.close()
+    return RedirectResponse(f"/fatture/{fid}?msg={msg}", status_code=303)
 
 
 @router.post("/fatture/{fid}/stato")

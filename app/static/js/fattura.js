@@ -99,7 +99,8 @@
     var boxRit = document.getElementById("box-ritenuta");
     if (c) {
       document.getElementById("sconto_cliente_pct").value = c.sconto_default_pct || "0";
-      document.getElementById("opposizione_ts").checked = !!Number(c.opposizione_ts_default);
+      var opp = document.getElementById("opposizione_ts");
+      if (opp) opp.checked = !!Number(c.opposizione_ts_default);
       var sostituto = !!Number(c.sostituto_imposta);
       chkRit.disabled = !sostituto;
       if (!sostituto) chkRit.checked = false;

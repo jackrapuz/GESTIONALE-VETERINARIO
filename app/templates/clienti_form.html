@@ -24,7 +24,6 @@
   </div>
   <div class="riga">
     <div class="campo"><label>Codice Fiscale</label><input name="codice_fiscale" value="{{ cliente.codice_fiscale|default('') }}"></div>
-    <div class="campo"><label>Partita IVA</label><input name="partita_iva" value="{{ cliente.partita_iva|default('') }}"></div>
   </div>
   <div class="riga">
     <div class="campo" style="flex:2 1 320px"><label>Via</label><input name="via" value="{{ cliente.via|default('') }}"></div>
@@ -41,11 +40,20 @@
   <div class="riga">
     <div class="campo"><label>Sconto default %</label><input name="sconto_default_pct" value="{{ cliente.sconto_default_pct|default('0.00') }}"></div>
     <div class="campo check"><input type="checkbox" id="opp" name="opposizione_ts_default" {{ 'checked' if cliente.opposizione_ts_default }}><label for="opp">Opposizione TS di default</label></div>
-    <div class="campo check"><input type="checkbox" id="sost" name="sostituto_imposta" {{ 'checked' if cliente.sostituto_imposta }}><label for="sost">Sostituto d'imposta (ritenuta)</label></div>
   </div>
   <div class="riga">
     <div class="campo" style="flex:1 1 100%"><label>Note</label><textarea name="note" rows="2">{{ cliente.note|default('') }}</textarea></div>
   </div>
+
+  <details class="avanzate">
+    <summary>Opzioni avanzate</summary>
+    <p class="muted">Servono solo per clienti con partita IVA (es. società/sostituti d'imposta).
+      Le fatture restano comunque cartacee, non elettroniche.</p>
+    <div class="riga">
+      <div class="campo"><label>Partita IVA</label><input name="partita_iva" value="{{ cliente.partita_iva|default('') }}"></div>
+      <div class="campo check"><input type="checkbox" id="sost" name="sostituto_imposta" {{ 'checked' if cliente.sostituto_imposta }}><label for="sost">Sostituto d'imposta (abilita ritenuta)</label></div>
+    </div>
+  </details>
   <div class="azioni">
     <button class="btn" type="submit">Salva</button>
     <a class="btn secondario" href="/clienti">Annulla</a>

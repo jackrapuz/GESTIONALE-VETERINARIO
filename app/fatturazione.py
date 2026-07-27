@@ -82,7 +82,8 @@ _COLONNE_FATTURA = [
     "modalita_pagamento", "pagamento_tracciato", "data_pagamento", "stato",
     "opposizione_ts", "ritenuta_applicata", "ritenuta_pct", "enpav_pct",
     "imponibile", "contributo_enpav", "base_iva", "iva_totale", "ritenuta_importo",
-    "totale_documento", "netto_a_pagare", "documento_riferimento_id", "note",
+    "totale_documento", "netto_a_pagare", "documento_riferimento_id",
+    "proforma_origine_id", "note",
 ]
 
 
@@ -105,6 +106,7 @@ def emetti_fattura(
     note: str = "",
     formato_numerazione: str = "{n}/{anno}",
     documento_riferimento_id: int | None = None,
+    proforma_origine_id: int | None = None,
 ) -> dict:
     """Emette il documento e restituisce ``{id, numero, numero_visualizzato, risultato}``.
 
@@ -154,6 +156,7 @@ def emetti_fattura(
             "totale_documento": str(risultato.totale_documento),
             "netto_a_pagare": str(risultato.netto_a_pagare),
             "documento_riferimento_id": documento_riferimento_id,
+            "proforma_origine_id": proforma_origine_id,
             "note": note,
         }
         ph = ", ".join("?" for _ in _COLONNE_FATTURA)

@@ -69,6 +69,7 @@ riduce solo il *netto a pagare*, non l'IVA né il totale.
 Dopo l'emissione, dal dettaglio puoi:
 - **Stampa PDF** (fattura professionale con ENPAV come voce separata, IVA per
   aliquota, totale, ed eventuale dicitura di opposizione TS);
+- **Invia email** / **WhatsApp** al cliente (vedi punto 6);
 - aggiornare lo **stato**/data di incasso;
 - creare una **nota di credito** (storno);
 - **annullare** il documento (il numero resta usato: la numerazione non ha buchi).
@@ -76,7 +77,32 @@ Dopo l'emissione, dal dettaglio puoi:
 La **numerazione** è automatica, progressiva per anno e non modificabile a
 ritroso. La lista fatture segnala eventuali "buchi" nella sequenza.
 
-## 5. Esportazioni
+> I campi per clienti con partita IVA (P.IVA, ritenuta d'acconto) sono sotto
+> **"Opzioni avanzate"**: servono solo per i sostituti d'imposta. Il gestionale
+> produce fatture **cartacee**, non fatture elettroniche via SdI: eventuali
+> documenti che richiedono la e-fattura vanno gestiti altrove/dal commercialista.
+
+## 5. Preventivi (proforma)
+
+In **Preventivi → Nuovo preventivo** crei un documento **non fiscale** con lo
+stesso calcolo della fattura e una **validità in giorni**. Dal dettaglio puoi
+stamparlo in PDF, inviarlo al cliente, **eliminarlo** oppure **convertirlo in
+fattura** (crea una vera fattura con gli stessi importi; il preventivo resta
+collegato e segnato come "convertito").
+
+## 6. Invio al cliente (email e WhatsApp)
+
+- **Email**: in *Impostazioni → Invio email (SMTP)* inserisci una sola volta i
+  dati del tuo provider (server, porta, sicurezza, utente, password, mittente).
+  Poi dal documento premi **Invia email**: parte il PDF allegato all'indirizzo
+  del cliente. Puoi anche spuntare *"Invia automaticamente all'emissione"*.
+  Le credenziali restano **solo sul tuo computer**; l'invio usa Internet solo in
+  quel momento.
+- **WhatsApp**: premi **WhatsApp** e si apre WhatsApp con un messaggio già
+  pronto per il cliente (il numero è preso dalla sua anagrafica). Il PDF va
+  inviato via email o allegato a mano: WhatsApp da link non allega file.
+
+## 7. Esportazioni
 
 **Esportazioni** (scegli il periodo in alto):
 
@@ -91,7 +117,7 @@ ritroso. La lista fatture segnala eventuali "buchi" nella sequenza.
 > isolato nel file `app/tracciato_ts.py`, facile da aggiornare senza toccare il
 > resto. **Verifica sempre la versione ufficiale corrente prima di un invio reale.**
 
-## 6. Backup e ripristino
+## 8. Backup e ripristino
 
 **Backup e manutenzione**:
 - **Crea backup**: salva una copia del database in `dati/backup`.
@@ -102,20 +128,20 @@ ritroso. La lista fatture segnala eventuali "buchi" nella sequenza.
 
 Consiglio: fai un backup periodico e conservane una copia fuori dal PC.
 
-## 7. Creare l'eseguibile (per chi sviluppa)
+## 9. Creare l'eseguibile (per chi sviluppa)
 
 Con Python 3.12: doppio clic su **`costruisci_exe.bat`**. Al termine trovi
 `dist\Gestionale.exe`. Copialo dove vuoi: al primo avvio creerà accanto a sé la
 cartella `dati`.
 
-## 8. Note fiscali
+## 10. Note fiscali
 
 - Regime **ordinario**: IVA in fattura (default 22%, modificabile per prestazione).
 - **ENPAV 2%** in rivalsa sul cliente, incluso nella base imponibile IVA.
 - **Niente marca da bollo** (si applica solo alle fatture senza IVA).
 - **Ritenuta d'acconto**: disattivata di default, solo per clienti sostituti d'imposta.
 
-## 9. Struttura del progetto
+## 11. Struttura del progetto
 
 ```
 app/            codice dell'applicazione (server, calcolo, PDF, export, backup)
@@ -130,7 +156,7 @@ avvia.bat            avvio senza eseguibile
 costruisci_exe.bat   creazione di Gestionale.exe
 ```
 
-## 10. Verifica tecnica (facoltativa)
+## 12. Verifica tecnica (facoltativa)
 
 Con l'ambiente attivo: `python -m pytest` esegue i test automatici
 (calcolo, numerazione, validazioni ed emissione fatture).

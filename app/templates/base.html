@@ -8,17 +8,18 @@
 </head>
 <body>
   {% import "_ui.html" as ui with context %}
-  {% set p = request.url.path %}
+  {% set percorso = request.url.path %}
   <header class="topbar">
     <a class="brand" href="/">{{ ui.ferro() }} Studio Veterinario</a>
     <nav>
-      <a href="/clienti"      class="{{ 'attivo' if p.startswith('/clienti') }}">Clienti</a>
-      <a href="/pazienti"     class="{{ 'attivo' if p.startswith('/pazienti') }}">Pazienti</a>
-      <a href="/listino"      class="{{ 'attivo' if p.startswith('/listino') }}">Listino</a>
-      <a href="/fatture"      class="{{ 'attivo' if p.startswith('/fatture') }}">Fatture</a>
-      <a href="/export"       class="{{ 'attivo' if p.startswith('/export') }}">Esportazioni</a>
-      <a href="/backup"       class="{{ 'attivo' if p.startswith('/backup') }}">Backup</a>
-      <a href="/impostazioni" class="{{ 'attivo' if p.startswith('/impostazioni') }}">Impostazioni</a>
+      <a href="/clienti"      class="{{ 'attivo' if percorso.startswith('/clienti') }}">Clienti</a>
+      <a href="/pazienti"     class="{{ 'attivo' if percorso.startswith('/pazienti') }}">Pazienti</a>
+      <a href="/listino"      class="{{ 'attivo' if percorso.startswith('/listino') }}">Listino</a>
+      <a href="/fatture"      class="{{ 'attivo' if percorso.startswith('/fatture') }}">Fatture</a>
+      <a href="/preventivi"   class="{{ 'attivo' if percorso.startswith('/preventivi') }}">Preventivi</a>
+      <a href="/export"       class="{{ 'attivo' if percorso.startswith('/export') }}">Esportazioni</a>
+      <a href="/backup"       class="{{ 'attivo' if percorso.startswith('/backup') }}">Backup</a>
+      <a href="/impostazioni" class="{{ 'attivo' if percorso.startswith('/impostazioni') }}">Impostazioni</a>
     </nav>
   </header>
 
