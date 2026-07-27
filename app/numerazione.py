@@ -19,34 +19,51 @@ def formatta_numero(numero: int, anno: int, formato: str = "{n}/{anno}") -> str:
         return f"{numero}/{anno}"
 
 
+def prossimo_numero(
+    conn: sqlite3.Connection, anno: int, tipo_documento: str = "fattura"
+) -> int:
+    """Legge e incrementa il contatore, SENZA gestire la transazione.
+
+    Va chiamata dentro una transazione di scrittura gia' aperta dal chiamante
+    (vedi ``assegna_numero`` e l'emissione fattura): il commit/rollback e la
+    scelta del lock restano responsabilita' del chiamante, cosi' la riserva del
+    numero e l'inserimento della fattura possono essere un'unica operazione
+    atomica (niente buchi se l'inserimento fallisce).
+    """
+    row = conn.execute(
+        "SELECT ultimo_numero FROM numerazione WHERE anno=? AND tipo_documento=?",
+        (anno, tipo_documento),
+    ).fetchone()
+    if row is None:
+        prossimo = 1
+        conn.execute(
+            "INSERT INTO numerazione (anno, tipo_documento, ultimo_numero) VALUES (?,?,?)",
+            (anno, tipo_documento, prossimo),
+        )
+    else:
+        prossimo = int(row["ultimo_numero"]) + 1
+        conn.execute(
+            "UPDATE numerazione SET ultimo_numero=? WHERE anno=? AND tipo_documento=?",
+            (prossimo, anno, tipo_documento),
+        )
+    return prossimo
+
+
 def assegna_numero(
     conn: sqlite3.Connection, anno: int, tipo_documento: str = "fattura"
 ) -> int:
     """Riserva e restituisce il prossimo numero progressivo, in modo atomico.
 
     Usa ``BEGIN IMMEDIATE`` per prendere subito il lock di scrittura: due
-    emissioni concorrenti non possono ottenere lo stesso numero. Il chiamante
-    inserisce la fattura nella STESSA connessione/transazione e fa commit.
+    emissioni concorrenti non possono ottenere lo stesso numero. Fa commit da
+    sola: utile quando serve solo il numero. Per emettere anche la fattura nella
+    stessa transazione usare invece ``prossimo_numero`` dentro la propria
+    ``BEGIN IMMEDIATE``.
     """
     # Apriamo esplicitamente una transazione di scrittura.
     conn.execute("BEGIN IMMEDIATE")
     try:
-        row = conn.execute(
-            "SELECT ultimo_numero FROM numerazione WHERE anno=? AND tipo_documento=?",
-            (anno, tipo_documento),
-        ).fetchone()
-        if row is None:
-            prossimo = 1
-            conn.execute(
-                "INSERT INTO numerazione (anno, tipo_documento, ultimo_numero) VALUES (?,?,?)",
-                (anno, tipo_documento, prossimo),
-            )
-        else:
-            prossimo = int(row["ultimo_numero"]) + 1
-            conn.execute(
-                "UPDATE numerazione SET ultimo_numero=? WHERE anno=? AND tipo_documento=?",
-                (prossimo, anno, tipo_documento),
-            )
+        prossimo = prossimo_numero(conn, anno, tipo_documento)
         conn.commit()
         return prossimo
     except Exception:

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block titolo %}{{ f.numero_visualizzato }}{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>
+    {{ 'Nota di credito' if f.tipo_documento == 'nota_credito' else 'Fattura' }}
+    n. {{ f.numero_visualizzato }}
+    {% if f.stato == 'annullata' %}<span class="badge err">Annullata</span>
+    {% elif f.stato == 'incassata' %}<span class="badge ok">Incassata</span>
+    {% else %}<span class="badge">Emessa</span>{% endif %}
+  </h1>
+  <div class="azioni">
+    <a class="btn secondario" href="/fatture">← Elenco</a>
+  </div>
+</div>
+
+<div class="scheda" style="max-width:960px">
+  <div class="riga">
+    <div class="campo"><label>Cliente</label><div>{{ f.cli_denominazione }}</div>
+      <div class="muted">{{ f.cli_indirizzo }}</div>
+      {% if f.cli_codice_fiscale %}<div class="muted">C.F. {{ f.cli_codice_fiscale }}</div>{% endif %}
+      {% if f.cli_partita_iva %}<div class="muted">P.IVA {{ f.cli_partita_iva }}</div>{% endif %}
+    </div>
+    <div class="campo"><label>Data emissione</label><div>{{ f.data_emissione|data_it }}</div></div>
+    <div class="campo"><label>Pagamento</label>
+      <div>{{ f.modalita_pagamento or '—' }} · {{ 'tracciato' if f.pagamento_tracciato else 'non tracciato' }}</div>
+      {% if f.data_pagamento %}<div class="muted">Incasso: {{ f.data_pagamento|data_it }}</div>{% endif %}
+    </div>
+  </div>
+
+  <table class="righe-fattura" style="margin-top:1rem">
+    <thead><tr><th>Descrizione</th><th class="num">Q.tà</th><th class="num">Prezzo €</th>
+      <th class="num">Sc. %</th><th class="num">IVA %</th><th>Sp. TS</th><th class="num">Imponibile</th></tr></thead>
+    <tbody>
+      {% for r in f.righe %}
+      <tr>
+        <td>{{ r.descrizione }}</td>
+        <td class="num">{{ r.quantita }}</td>
+        <td class="num">{{ r.prezzo_unitario|euro }}</td>
+        <td class="num">{{ r.sconto_riga_pct }}</td>
+        <td class="num">{{ r.aliquota_iva }}</td>
+        <td>{{ r.tipo_spesa_ts }}</td>
+        <td class="num">{{ r.imponibile_riga|euro }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="riepilogo" style="margin-top:1rem">
+    {% for g in gruppi %}
+    <div><span>Imponibile (IVA {{ g.aliquota }}%)</span><b>{{ g.imponibile|euro }}</b></div>
+    <div><span>Contributo ENPAV {{ f.enpav_pct }}%</span><b>{{ g.enpav|euro }}</b></div>
+    <div><span>Base imponibile IVA {{ g.aliquota }}%</span><b>{{ g.base_iva|euro }}</b></div>
+    <div><span>IVA {{ g.aliquota }}%</span><b>{{ g.iva|euro }}</b></div>
+    {% endfor %}
+    <div class="tot"><span>Totale documento</span><b>{{ f.totale_documento|euro }}</b></div>
+    {% if f.ritenuta_applicata %}
+    <div><span>Ritenuta d'acconto {{ f.ritenuta_pct }}%</span><b>-{{ f.ritenuta_importo|euro }}</b></div>
+    <div class="tot"><span>Netto a pagare</span><b>{{ f.netto_a_pagare|euro }}</b></div>
+    {% endif %}
+  </div>
+
+  {% if f.opposizione_ts %}
+  <p class="nota-opposizione">{{ studio.testo_dicitura_opposizione_ts }}</p>
+  {% endif %}
+  {% if f.note %}<p class="muted"><strong>Note:</strong> {{ f.note }}</p>{% endif %}
+  {% if f.documento_riferimento_id %}
+  <p class="muted">Riferito al documento
+    <a href="/fatture/{{ f.documento_riferimento_id }}">#{{ f.documento_riferimento_id }}</a>.</p>
+  {% endif %}
+</div>
+
+{% if f.stato != 'annullata' %}
+<div class="scheda" style="max-width:960px; margin-top:1rem">
+  <h2 class="sez">Azioni</h2>
+  <form method="post" action="/fatture/{{ f.id }}/stato" class="riga" style="align-items:flex-end">
+    <div class="campo"><label>Stato</label>
+      <select name="stato">
+        <option value="emessa" {{ 'selected' if f.stato == 'emessa' }}>Emessa</option>
+        <option value="incassata" {{ 'selected' if f.stato == 'incassata' }}>Incassata</option>
+      </select></div>
+    <div class="campo"><label>Data incasso</label>
+      <input type="date" name="data_pagamento" value="{{ f.data_pagamento }}"></div>
+    <div class="campo" style="flex:0 0 auto"><button class="btn" type="submit">Aggiorna stato</button></div>
+  </form>
+  <div class="azioni" style="margin-top:1rem">
+    {% if f.tipo_documento == 'fattura' %}
+    <form method="post" action="/fatture/{{ f.id }}/nota-credito"
+          onsubmit="return confirm('Creare una nota di credito che storna questa fattura?');">
+      <button class="btn secondario" type="submit">Crea nota di credito (storno)</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/fatture/{{ f.id }}/annulla"
+          onsubmit="return confirm('Annullare il documento? Il numero resta usato e non riutilizzabile.');">
+      <button class="btn pericolo" type="submit">Annulla documento</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

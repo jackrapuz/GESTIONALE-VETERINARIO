@@ -32,24 +32,17 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
     # Router delle sezioni (registrati man mano che vengono implementati).
-    from app.routers import clienti, impostazioni, pazienti, prestazioni
+    from app.routers import clienti, fatture, impostazioni, pazienti, prestazioni
 
     app.include_router(impostazioni.router)
     app.include_router(clienti.router)
     app.include_router(pazienti.router)
     app.include_router(prestazioni.router)
+    app.include_router(fatture.router)
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
         return templates.TemplateResponse(request, "home.html", {"titolo": "Home"})
-
-    @app.get("/fatture", response_class=HTMLResponse)
-    def fatture_placeholder(request: Request):
-        # L'emissione fatture arriva nella Fase 4; placeholder per la navigazione.
-        return templates.TemplateResponse(
-            request, "prossimamente.html",
-            {"titolo": "Fatture", "sezione": "Emissione fatture"},
-        )
 
     return app
 

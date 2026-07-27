@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titolo %}Fatture{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>Fatture e note di credito</h1>
+  <a class="btn" href="/fatture/nuova">+ Nuova fattura</a>
+</div>
+
+{% if buchi %}
+<div class="errori">
+  <strong>Attenzione:</strong> nella numerazione fatture {{ anno }} mancano i numeri:
+  {{ buchi|join(', ') }}.
+</div>
+{% endif %}
+
+{% if fatture %}
+<table>
+  <thead>
+    <tr>
+      <th>Numero</th><th>Tipo</th><th>Data</th><th>Cliente</th>
+      <th class="num">Imponibile</th><th class="num">ENPAV</th>
+      <th class="num">IVA</th><th class="num">Totale</th><th>Stato</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in fatture %}
+    <tr>
+      <td><a href="/fatture/{{ f.id }}">{{ f.numero_visualizzato }}</a></td>
+      <td>{{ 'Nota credito' if f.tipo_documento == 'nota_credito' else 'Fattura' }}</td>
+      <td>{{ f.data_emissione|data_it }}</td>
+      <td>{{ f.cli_denominazione }}</td>
+      <td class="num">{{ f.imponibile|euro }}</td>
+      <td class="num">{{ f.contributo_enpav|euro }}</td>
+      <td class="num">{{ f.iva_totale|euro }}</td>
+      <td class="num"><strong>{{ f.totale_documento|euro }}</strong></td>
+      <td>
+        {% if f.stato == 'incassata' %}<span class="badge ok">Incassata</span>
+        {% elif f.stato == 'annullata' %}<span class="badge err">Annullata</span>
+        {% else %}<span class="badge">Emessa</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nessun documento emesso. Inizia da <a href="/fatture/nuova">Nuova fattura</a>.</p>
+{% endif %}
+{% endblock %}
