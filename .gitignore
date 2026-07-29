@@ -28,3 +28,14 @@ Desktop.ini
 
 # Output export generati
 export_output/
+
+# Materiale di lavoro con dati personali: questo repository e' PUBBLICO.
+# I documenti reali contengono dati fiscali della dottoressa e anagrafiche dei suoi
+# clienti (nome + codice fiscale), le foto sono personali. Restano solo in locale.
+FATTURA*.docx
+BASE PER LOGO.*
+Gemini_Generated_Image*
+
+# Documenti generati a campione per collaudo (contengono l'intestazione reale)
+PROFORMA_esempio.pdf
+*_esempio.pdf
