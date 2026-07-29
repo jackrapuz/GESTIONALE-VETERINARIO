@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titolo %}{{ titolo|default('Gestionale') }}{% endblock %} · Gestionale Veterinario</title>
+  <link rel="icon" href="/static/img/marchio.ico" sizes="any">
   <link rel="stylesheet" href="/static/css/stile.css">
 </head>
 <body>
   {% import "_ui.html" as ui with context %}
   {% set percorso = request.url.path %}
   <header class="topbar">
-    <a class="brand" href="/">{{ ui.ferro() }} Studio Veterinario</a>
+    <a class="brand" href="/">{{ ui.marchio() }} Studio Veterinario</a>
     <nav>
       <a href="/clienti"      class="{{ 'attivo' if percorso.startswith('/clienti') }}">Clienti</a>
       <a href="/pazienti"     class="{{ 'attivo' if percorso.startswith('/pazienti') }}">Pazienti</a>

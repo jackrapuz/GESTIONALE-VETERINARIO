@@ -55,6 +55,20 @@ body {
   color: #fff; text-decoration: none; letter-spacing: .2px;
 }
 .topbar .brand svg { width: 26px; height: 26px; flex: 0 0 auto; }
+
+/* ---- Marchio ------------------------------------------------------------
+   L'immagine e' una maschera senza colore: qui il colore lo mette
+   background-color, cosi' il marchio eredita quello del testo che lo circonda
+   e funziona identico su fondo chiaro e su fondo verde. L'altezza si imposta
+   dove serve; la larghezza la trova da sola. */
+.marchio {
+  display: inline-block; flex: 0 0 auto;
+  aspect-ratio: 376 / 457;
+  background-color: currentColor;
+  -webkit-mask: url("/static/img/marchio.png") no-repeat center / contain;
+  mask: url("/static/img/marchio.png") no-repeat center / contain;
+}
+.topbar .brand .marchio { height: 34px; }
 .topbar nav { display: flex; gap: .3rem; flex-wrap: wrap; margin-left: auto; }
 .topbar nav a {
   text-decoration: none; color: #cdd9cf;

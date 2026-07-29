@@ -17,38 +17,61 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
+from app import marchio
 from app.templating import data_it, euro
 
-_ACCENTO = colors.HexColor("#2563eb")
-_GRIGIO = colors.HexColor("#64748b")
-_BORDO = colors.HexColor("#d7dce3")
+# Stessa identita' dell'app ("Scuderia"): verde da corsa, ottone come accento,
+# grigio-verde per i testi secondari. I valori sono quelli di app/static/css/stile.css.
+_VERDE = colors.HexColor("#223d33")
+_OTTONE = colors.HexColor("#b5822e")
+_ACCENTO = _VERDE
+_GRIGIO = colors.HexColor("#5e6b63")
+_BORDO = colors.HexColor("#dbe2db")
+_TINTA = colors.HexColor("#eef2ec")     # fondo tenue per l'intestazione della tabella
+_MARCHIO = _VERDE
+
+# Serif per il nome dello studio: e' il carattere dei titoli nell'app. Times-Roman
+# e' incluso in ReportLab, quindi non aggiunge nessun file al pacchetto.
+_SERIF = "Times-Roman"
 
 
 def _stili():
     ss = getSampleStyleSheet()
     ss.add(ParagraphStyle("Studio", parent=ss["Normal"], fontSize=9, leading=12, textColor=_GRIGIO))
-    ss.add(ParagraphStyle("StudioNome", parent=ss["Normal"], fontSize=14, leading=17,
-                          textColor=colors.HexColor("#1f2933"), spaceAfter=2))
-    ss.add(ParagraphStyle("TitoloDoc", parent=ss["Normal"], fontSize=16, leading=19,
-                          textColor=_ACCENTO, spaceBefore=6, spaceAfter=2))
+    ss.add(ParagraphStyle("StudioNome", parent=ss["Normal"], fontName=_SERIF,
+                          fontSize=16, leading=19,
+                          textColor=colors.HexColor("#16211c"), spaceAfter=3))
+    ss.add(ParagraphStyle("Qualifica", parent=ss["Normal"], fontSize=7, leading=9,
+                          textColor=_OTTONE, spaceAfter=3))
+    ss.add(ParagraphStyle("TitoloDoc", parent=ss["Normal"], fontName=_SERIF,
+                          fontSize=17, leading=20,
+                          textColor=_ACCENTO, spaceBefore=4, spaceAfter=2))
     ss.add(ParagraphStyle("Etichetta", parent=ss["Normal"], fontSize=8, leading=10,
                           textColor=_GRIGIO, spaceAfter=1))
     ss.add(ParagraphStyle("Corpo", parent=ss["Normal"], fontSize=9.5, leading=13))
     ss.add(ParagraphStyle("Piccolo", parent=ss["Normal"], fontSize=8, leading=11, textColor=_GRIGIO))
+    # Stessi toni d'avviso dell'app (--warn / --warn-bg in stile.css).
     ss.add(ParagraphStyle("Dicitura", parent=ss["Normal"], fontSize=8.5, leading=12,
-                          textColor=colors.HexColor("#92400e"),
-                          backColor=colors.HexColor("#fffbeb"),
-                          borderColor=colors.HexColor("#fde68a"), borderWidth=0.5,
+                          textColor=colors.HexColor("#8a5f14"),
+                          backColor=colors.HexColor("#fbf3e3"),
+                          borderColor=colors.HexColor("#e6d3a8"), borderWidth=0.5,
                           borderPadding=6, spaceBefore=8))
     return ss
 
 
 def _intestazione_studio(studio: dict, ss) -> list:
+    """Testata: il marchio a sinistra, i dati dello studio accanto."""
     nome = studio.get("denominazione") or f"{studio.get('nome','')} {studio.get('cognome','')}".strip()
-    righe = [Paragraph(nome or "Studio Veterinario", ss["StudioNome"])]
+    nome = nome or "Studio Veterinario"
+    righe = []
+    # La qualifica sopra il nome, come nelle fatture cartacee gia' in uso. Si omette
+    # se il nome la contiene gia', per non ripeterla due volte di seguito.
+    if "veterinari" not in nome.lower():
+        righe.append(Paragraph("M E D I C O &nbsp; V E T E R I N A R I O", ss["Qualifica"]))
+    righe.append(Paragraph(nome, ss["StudioNome"]))
     ind = ", ".join(p for p in [
         studio.get("via", ""),
         " ".join(x for x in [studio.get("cap", ""), studio.get("citta", "")] if x)
@@ -73,7 +96,20 @@ def _intestazione_studio(studio: dict, ss) -> list:
         dati.append(f"IBAN {studio['iban']}")
     for d in dati:
         righe.append(Paragraph(d, ss["Studio"]))
-    return righe
+
+    testata = Table([[marchio.flowable(20 * mm, _MARCHIO), righe]],
+                    colWidths=[marchio.larghezza_per(20 * mm) + 6 * mm, None])
+    testata.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    # Filetto in ottone che chiude la carta intestata e la stacca dal documento.
+    return [testata, Spacer(1, 4 * mm),
+            HRFlowable(width="100%", thickness=1.2, color=_OTTONE,
+                       spaceBefore=0, spaceAfter=0)]
 
 
 _TITOLI = {"nota_credito": "NOTA DI CREDITO", "proforma": "PROFORMA"}
@@ -121,8 +157,8 @@ def _tabella_righe(f: dict, ss) -> Table:
         ])
     t = Table(dati, colWidths=[80 * mm, 15 * mm, 25 * mm, 14 * mm, 14 * mm, 22 * mm], repeatRows=1)
     t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f5")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), _GRIGIO),
+        ("BACKGROUND", (0, 0), (-1, 0), _TINTA),
+        ("TEXTCOLOR", (0, 0), (-1, 0), _VERDE),
         ("FONTSIZE", (0, 0), (-1, 0), 8),
         ("FONTSIZE", (0, 1), (-1, -1), 9),
         ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
