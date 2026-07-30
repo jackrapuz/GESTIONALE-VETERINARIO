@@ -32,11 +32,17 @@ _COLONNE = [
 ]
 
 
-def _importo_voce(v: dict | sqlite3.Row) -> str:
-    """Importo praticato della voce: quantita x prezzo x (1 - sconto%)."""
+def _importo_voce(v: dict | sqlite3.Row, sconto_cliente_pct="0") -> str:
+    """Importo praticato della voce: quantita x prezzo, meno sconto riga e cliente.
+
+    Deve seguire lo stesso ordine di :func:`app.calcolo.calcola_fattura` (prima lo
+    sconto di riga, poi quello del cliente, arrotondando a fine riga): e' l'importo
+    che finira' in fattura, e a schermo non puo' dire un numero diverso.
+    """
     lordo = dec(v["quantita"]) * dec(v["prezzo_unitario"])
-    netto = lordo * (dec("1") - dec(v["sconto_riga_pct"]) / dec("100"))
-    return str(q2(netto))
+    dopo_riga = lordo * (dec("1") - dec(v["sconto_riga_pct"]) / dec("100"))
+    dopo_cliente = dopo_riga * (dec("1") - dec(sconto_cliente_pct) / dec("100"))
+    return str(q2(dopo_cliente))
 
 
 def annota(
@@ -99,7 +105,7 @@ def da_fatturare(conn: sqlite3.Connection) -> list[dict]:
     """
     clienti = conn.execute(
         "SELECT DISTINCT c.id, c.tipo, c.nome, c.cognome, c.ragione_sociale, "
-        "c.fatturazione_mensile "
+        "c.fatturazione_mensile, c.sconto_default_pct "
         "FROM clienti c JOIN prestazioni_eseguite pe ON pe.cliente_id = c.id "
         "WHERE pe.fattura_id IS NULL "
         "ORDER BY c.fatturazione_mensile DESC, c.cognome, c.ragione_sociale, c.nome",
@@ -108,10 +114,11 @@ def da_fatturare(conn: sqlite3.Connection) -> list[dict]:
     gruppi: list[dict] = []
     for c in clienti:
         c = dict(c)
+        sconto = c.get("sconto_default_pct") or "0"
         voci = _voci_cliente(conn, c["id"])
-        totale = q2(sum((dec(_importo_voce(v)) for v in voci), dec("0")))
+        totale = q2(sum((dec(_importo_voce(v, sconto)) for v in voci), dec("0")))
         for v in voci:
-            v["importo"] = _importo_voce(v)
+            v["importo"] = _importo_voce(v, sconto)
         gruppi.append({
             "cliente_id": c["id"],
             "denominazione": denominazione_cliente(c),
@@ -176,6 +183,10 @@ def genera_fattura(
         cliente=dict(cliente),
         righe=righe,
         data_emissione=date.today().isoformat(),
+        # Il registro annota il prezzo di LISTINO: lo sconto concordato col cliente
+        # va tolto qui, come fa gia' la fattura compilata a mano. Senza, lo stesso
+        # cliente pagherebbe di piu' a seconda della strada usata per fatturarlo.
+        sconto_cliente_pct=cliente["sconto_default_pct"] or "0",
         enpav_pct=studio.get("enpav_pct") or "2",
         opposizione_ts=bool(cliente["opposizione_ts_default"]),
         formato_numerazione=studio.get("formato_numerazione") or "{n}/{anno}",
@@ -207,6 +218,7 @@ def genera_proforma(
         cliente=dict(cliente),
         righe=_righe_da_voci(voci),
         data_emissione=date.today().isoformat(),
+        sconto_cliente_pct=cliente["sconto_default_pct"] or "0",
         enpav_pct=studio.get("enpav_pct") or "2",
     )
     with conn:

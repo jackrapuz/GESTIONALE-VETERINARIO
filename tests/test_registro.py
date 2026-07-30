@@ -129,3 +129,58 @@ def test_proforma_non_consuma_le_voci(conn):
         "SELECT COUNT(*) FROM prestazioni_eseguite WHERE proforma_id IS NOT NULL"
     ).fetchone()[0]
     assert n_proforma == 3
+
+
+# --- sconto di anagrafica: i due percorsi devono coincidere -----------------
+
+def test_lo_sconto_del_cliente_vale_anche_fatturando_dal_registro(conn):
+    """Stesso cliente e stessa prestazione: fattura a mano e fattura dal registro
+    devono dare lo stesso totale.
+
+    Il registro annota il prezzo di LISTINO (il form lo precompila da li'), quindi
+    lo sconto concordato in anagrafica va tolto all'emissione. Senza, il cliente
+    veniva sovrafatturato solo perche' la fattura era nata dal registro.
+    """
+    from decimal import Decimal
+
+    from app.calcolo import RigaInput
+    from app.fatturazione import emetti_fattura
+
+    conn.execute("UPDATE clienti SET sconto_default_pct='10.00' WHERE id=2")
+    conn.commit()
+    cliente = conn.execute("SELECT * FROM clienti WHERE id=2").fetchone()
+    studio = {"enpav_pct": "2", "formato_numerazione": "{n}/{anno}"}
+
+    a_mano = emetti_fattura(
+        conn, cliente=dict(cliente),
+        righe=[RigaInput("Visita", Decimal(1), Decimal("100"), Decimal(22))],
+        data_emissione="2026-07-30", sconto_cliente_pct="10", enpav_pct="2",
+    )
+    annota(conn, data_prestazione="2026-07-30", cliente_id=2, descrizione="Visita",
+           quantita="1", prezzo_unitario="100.00", aliquota_iva="22.00")
+    dal_registro = genera_fattura(conn, 2, studio)
+
+    assert (dal_registro["risultato"].totale_documento
+            == a_mano["risultato"].totale_documento)
+
+
+def test_il_totale_a_schermo_e_quello_che_finira_in_fattura(conn):
+    """Se la schermata del registro ignorasse lo sconto, direbbe un numero e la
+    fattura ne stamperebbe un altro."""
+    conn.execute("UPDATE clienti SET sconto_default_pct='10.00' WHERE id=2")
+    conn.commit()
+    annota(conn, data_prestazione="2026-07-30", cliente_id=2, descrizione="Visita",
+           quantita="1", prezzo_unitario="100.00", aliquota_iva="22.00")
+
+    gruppo = next(g for g in da_fatturare(conn) if g["cliente_id"] == 2)
+    esito = genera_fattura(conn, 2, {"enpav_pct": "2"})
+    assert gruppo["totale"] == str(esito["risultato"].imponibile)
+
+
+def test_la_proforma_dal_registro_applica_lo_stesso_sconto(conn):
+    conn.execute("UPDATE clienti SET sconto_default_pct='10.00' WHERE id=2")
+    conn.commit()
+    annota(conn, data_prestazione="2026-07-30", cliente_id=2, descrizione="Visita",
+           quantita="1", prezzo_unitario="100.00", aliquota_iva="22.00")
+    esito = genera_proforma(conn, 2, {"enpav_pct": "2"})
+    assert str(esito["risultato"].imponibile) == "90.00"
