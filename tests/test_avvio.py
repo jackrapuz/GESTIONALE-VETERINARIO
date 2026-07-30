@@ -9,6 +9,7 @@ semplicemente non si apre e non dice niente.
 import socket
 import sys
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -34,12 +35,75 @@ def test_salute_permette_di_riconoscere_un_istanza_gia_avviata():
     assert r.text.startswith("gestionale")
 
 
-def test_spegni_risponde_prima_di_fermare_il_server():
+# --- riconoscere la PROPRIA istanza -----------------------------------------
+
+def test_salute_dice_quale_archivio_sta_servendo():
+    """Il difetto che ha bruciato tre giorni: un server di sviluppo rispondeva
+    "gestionale" come l'exe, e il doppio clic portava sull'archivio sbagliato."""
+    corpo = _client().get("/salute").text
+    righe = corpo.splitlines()
+    assert len(righe) >= 3, f"/salute deve dire nome, cartella dati e pagine: {corpo!r}"
+    assert Path(righe[1]).resolve() == m.DATI_DIR.resolve()
+    assert righe[2].isdigit()
+
+
+def test_la_propria_risposta_viene_riconosciuta():
+    """Ciclo chiuso: quello che /salute scrive, _stessa_installazione lo accetta."""
+    assert m._stessa_installazione(_client().get("/salute").text) is True
+
+
+def test_un_istanza_su_un_altro_archivio_non_viene_riusata():
+    """E' il cuore della correzione: stesso programma, dati diversi -> non e' la
+    nostra, il doppio clic deve avviarne una propria invece di mostrare le
+    fatture di un altro archivio."""
+    altrove = "gestionale-veterinario\nC:\\\\altro\\\\posto\\\\dati\n1"
+    assert m._stessa_installazione(altrove) is False
+
+
+def test_una_versione_vecchia_senza_cartella_non_viene_riusata():
+    """Prudenza: se non dice quale archivio serve, non ci fidiamo."""
+    assert m._stessa_installazione("gestionale-veterinario") is False
+
+
+def test_una_risposta_estranea_non_viene_riusata():
+    for corpo in ("", "qualcos'altro", '{"detail":"Not Found"}'):
+        assert m._stessa_installazione(corpo) is False
+
+
+def test_le_pagine_aperte_si_leggono_da_salute():
+    assert m._pagine_da_salute("gestionale-veterinario\nC:\\dati\n3") == 3
+    assert m._pagine_da_salute("gestionale-veterinario\nC:\\dati") == 0
+    assert m._pagine_da_salute("gestionale-veterinario\nC:\\dati\nboh") == 0
+
+
+def test_portare_in_primo_piano_non_esplode_se_non_trova_nulla():
+    """Best effort: se la finestra non c'e', deve dire False, non sollevare —
+    altrimenti il doppio clic finirebbe in un errore invece di aprire il browser."""
+    assert m._porta_in_primo_piano("titolo che non esiste da nessuna parte") is False
+
+
+def test_spegni_risponde_prima_di_fermare_il_server(monkeypatch):
     """La pagina di commiato deve arrivare: se il server morisse subito, l'utente
     vedrebbe un errore del browser invece di una conferma."""
+    monkeypatch.setattr(m, "_server", ServerFinto())
     r = _client().post("/spegni")
     assert r.status_code == 200
-    assert "chiuso" in r.text.lower()
+    assert "Gestionale chiuso" in r.text
+    # l'arresto e' rimandato di un istante, non immediato
+    assert m._server.should_exit is False
+    time.sleep(1.4)
+    assert m._server.should_exit is True
+
+
+def test_se_non_puo_chiudere_lo_dice(monkeypatch):
+    """Avviato dalla CLI di uvicorn non c'e' l'oggetto server e il pulsante non
+    puo' fermare nulla. Prima la pagina diceva "chiuso" comunque: e' cosi' che e'
+    nato un orfano rimasto in piedi tre giorni, invisibile, con codice vecchio.
+    Un'istanza che si crede spenta e invece vive e' peggio di un errore."""
+    monkeypatch.setattr(m, "_server", None)
+    testo = _client().post("/spegni").text
+    assert "Non l'ho potuto chiudere" in testo
+    assert "Ctrl+C" in testo
 
 
 def test_ogni_pagina_offre_come_chiudere_il_gestionale():

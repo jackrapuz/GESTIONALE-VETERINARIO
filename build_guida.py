@@ -520,6 +520,9 @@ td.x {{ text-align:center; color:var(--nebbia); font-size:1.05rem; }}
         giornata, mentre fai altro al computer. Finch&eacute; la pagina resta aperta il
         gestionale resta acceso, anche se non lo guardi per ore.</div>
       </div>
+      <p class="dim piccolo">E se per abitudine ridai doppio clic sull'icona quando
+      &egrave; gi&agrave; aperto, non ne apre un altro: ti riporta davanti la finestra che hai
+      gi&agrave;.</p>
     </div>
   </section>
 
