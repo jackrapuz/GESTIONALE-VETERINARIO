@@ -1,75 +1,46 @@
-"""Invio dei documenti al cliente: email (SMTP) e link WhatsApp.
+"""Invio dei documenti al cliente via WhatsApp.
 
-Coerente col modello offline-first: l'app non usa alcun servizio cloud; l'invio
-email parte dal PC via SMTP (configurato in Impostazioni, credenziali salvate solo
-in locale) e richiede Internet solo nel momento dell'invio. Per WhatsApp si genera
-un link ``wa.me`` con messaggio precompilato: sara' l'utente a premere invio
-(niente API a pagamento, niente automazioni non ufficiali).
+**Perche' non l'email.** C'era un invio SMTP: chiedeva server, porta, utente e
+password del provider, e la password finiva nel database. Per un unico utente che
+manda i documenti dal telefono e' complicazione pura, quindi e' stato rimosso.
+
+**Perche' non l'API di WhatsApp.** L'API ufficiale (WhatsApp Business Cloud)
+vuole un account business, un numero dedicato, token da rinnovare e messaggi su
+modello approvato, ed e' a pagamento. Le librerie che pilotano WhatsApp Web
+"facendo finta di essere un umano" si rompono a ogni aggiornamento e violano i
+termini d'uso. Nessuna delle due strade e' adatta a questo programma.
+
+**Come funziona qui.** Tre pezzi, tutti locali:
+
+1. il PDF viene salvato in ``dati/da_inviare`` (resta li', ritrovabile);
+2. il file viene messo negli **appunti di Windows** *come file*, non come testo:
+   e' l'unico modo di far arrivare un allegato dentro WhatsApp senza API, perche'
+   nella chat basta un Ctrl+V;
+3. si apre ``wa.me`` sul numero del cliente con il messaggio gia' scritto.
+
+Restano quindi due gesti umani (incollare e premere invio), ed e' voluto: e' anche
+l'ultimo controllo prima che il documento parta.
 """
 from __future__ import annotations
 
 import re
-import smtplib
-import ssl
-from email.message import EmailMessage
+import subprocess
+import sys
+from pathlib import Path
 from urllib.parse import quote
 
+from app.db import DATI_DIR
 
-class ConfigurazioneMancante(Exception):
-    """Sollevata quando manca la configurazione SMTP o l'email del destinatario."""
+# I PDF preparati per l'invio: accanto ai dati, non in una cartella temporanea,
+# cosi' se l'incollata va storta il file e' ancora la'.
+CARTELLA_INVII = DATI_DIR / "da_inviare"
+
+# Evita il lampo della finestra di console: l'app gira senza terminale.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-def _mittente(studio: dict) -> str:
-    return (studio.get("smtp_mittente") or studio.get("smtp_utente") or studio.get("email") or "").strip()
-
-
-def invia_email(
-    studio: dict,
-    *,
-    destinatario: str,
-    oggetto: str,
-    corpo: str,
-    allegati: list[tuple[str, bytes, str]] | None = None,
-) -> None:
-    """Invia un'email con eventuali allegati usando l'SMTP configurato in ``studio``.
-
-    ``allegati`` = lista di (nome_file, contenuto_bytes, sottotipo_mime) es.
-    ("fattura.pdf", b"...", "pdf"). Solleva ``ConfigurazioneMancante`` o le
-    eccezioni di ``smtplib`` in caso di problemi (gestite dal chiamante).
-    """
-    host = (studio.get("smtp_host") or "").strip()
-    mittente = _mittente(studio)
-    if not host or not mittente:
-        raise ConfigurazioneMancante(
-            "Configura server SMTP e mittente in Impostazioni prima di inviare email.")
-    if not (destinatario or "").strip():
-        raise ConfigurazioneMancante("Il cliente non ha un indirizzo email.")
-
-    porta = int(str(studio.get("smtp_porta") or "587").strip() or "587")
-    sicurezza = (studio.get("smtp_sicurezza") or "starttls").strip().lower()
-    utente = (studio.get("smtp_utente") or "").strip()
-    password = studio.get("smtp_password") or ""
-
-    msg = EmailMessage()
-    msg["From"] = mittente
-    msg["To"] = destinatario
-    msg["Subject"] = oggetto
-    msg.set_content(corpo)
-    for nome, dati, sottotipo in (allegati or []):
-        msg.add_attachment(dati, maintype="application", subtype=sottotipo, filename=nome)
-
-    if sicurezza == "ssl":
-        with smtplib.SMTP_SSL(host, porta, context=ssl.create_default_context(), timeout=30) as s:
-            if utente:
-                s.login(utente, password)
-            s.send_message(msg)
-    else:
-        with smtplib.SMTP(host, porta, timeout=30) as s:
-            if sicurezza == "starttls":
-                s.starttls(context=ssl.create_default_context())
-            if utente:
-                s.login(utente, password)
-            s.send_message(msg)
+class TelefonoMancante(Exception):
+    """Il cliente non ha un numero di telefono in anagrafica."""
 
 
 def normalizza_telefono(telefono: str, prefisso_default: str = "39") -> str:
@@ -94,7 +65,7 @@ def link_whatsapp(telefono: str, testo: str) -> str:
 
 
 def testo_messaggio(studio: dict, f: dict) -> str:
-    """Testo predefinito del messaggio (email/WhatsApp) per un documento."""
+    """Testo predefinito del messaggio WhatsApp per un documento."""
     tipo = "nota di credito" if f.get("tipo_documento") == "nota_credito" else \
            ("preventivo" if f.get("tipo_documento") == "proforma" else "fattura")
     nome_studio = (studio.get("denominazione")
@@ -105,3 +76,63 @@ def testo_messaggio(studio: dict, f: dict) -> str:
         f"del {f.get('data_emissione')}, per un totale di € {f.get('totale_documento')}.\n"
         f"Cordiali saluti,\n{nome_studio}"
     )
+
+
+def nome_file_documento(f: dict) -> str:
+    """Nome del PDF: leggibile dal cliente e valido come nome file su Windows."""
+    tipo = {"nota_credito": "nota_credito", "proforma": "preventivo"}.get(
+        f.get("tipo_documento", ""), "fattura")
+    numero = str(f.get("numero_visualizzato", "")).replace("/", "-")
+    return f"{tipo}_{numero}.pdf"
+
+
+def salva_pdf_da_inviare(nome_file: str, contenuto: bytes) -> Path:
+    """Scrive il PDF in ``dati/da_inviare`` e ne restituisce il percorso."""
+    CARTELLA_INVII.mkdir(parents=True, exist_ok=True)
+    percorso = CARTELLA_INVII / nome_file
+    percorso.write_bytes(contenuto)
+    return percorso
+
+
+def copia_negli_appunti(percorso: Path) -> bool:
+    """Mette il file negli appunti di Windows, cosi' Ctrl+V lo allega in WhatsApp.
+
+    Serve un *file drop list*, non del testo: lo fa ``Set-Clipboard -LiteralPath``.
+    PowerShell viene chiamato con ``-STA`` perche' le API degli appunti di Windows
+    funzionano solo in un apartment a thread singolo.
+
+    Ritorna ``False`` invece di sollevare: se gli appunti non si popolano l'invio
+    e' comunque possibile allegando il file a mano, e la pagina lo spiega.
+    """
+    if sys.platform != "win32":
+        return False
+    # Nelle stringhe PowerShell tra apici singoli, l'apice si raddoppia.
+    letterale = str(percorso).replace("'", "''")
+    try:
+        esito = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-STA", "-Command",
+             f"Set-Clipboard -LiteralPath '{letterale}'"],
+            capture_output=True, timeout=20, creationflags=_NO_WINDOW,
+        )
+        return esito.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def prepara_invio_whatsapp(studio: dict, f: dict, pdf: bytes, telefono: str) -> dict:
+    """Prepara tutto per l'invio: PDF su disco, negli appunti, link alla chat.
+
+    Solleva :class:`TelefonoMancante` se il cliente non ha un numero: senza quello
+    non c'e' chat da aprire, ed e' meglio dirlo che aprire WhatsApp sul vuoto.
+    """
+    if not (telefono or "").strip():
+        raise TelefonoMancante(
+            "Questo cliente non ha un numero di telefono in anagrafica.")
+    percorso = salva_pdf_da_inviare(nome_file_documento(f), pdf)
+    return {
+        "percorso": percorso,
+        "cartella": str(percorso.parent),
+        "negli_appunti": copia_negli_appunti(percorso),
+        "link": link_whatsapp(telefono, testo_messaggio(studio, f)),
+        "numero": normalizza_telefono(telefono),
+    }

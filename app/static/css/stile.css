@@ -85,6 +85,20 @@ body {
   padding: 2.5rem 0 1.5rem;
 }
 .footer svg { width: 13px; height: 13px; vertical-align: -2px; opacity: .6; margin-right: .3rem; }
+/* Chiusura del gestionale. Senza finestra del terminale e' l'unico modo di
+   fermarlo, quindi deve saltare all'occhio: un pulsante vero, non un link. */
+.footer .spegni { margin-top: 1.1rem; }
+.footer .chiudi {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .6rem 1.2rem; cursor: pointer;
+  font-family: var(--sans); font-size: .92rem; font-weight: 600;
+  color: var(--verde); background: var(--superficie);
+  border: 1.5px solid var(--verde); border-radius: 999px;
+  box-shadow: var(--ombra-s); transition: background .15s, color .15s;
+}
+.footer .chiudi svg { width: 15px; height: 15px; opacity: 1; margin: 0; }
+.footer .chiudi:hover { background: var(--verde); color: #fff; }
+.footer .chiudi:focus-visible { outline: 3px solid var(--ottone); outline-offset: 2px; }
 
 /* ---- Tipografia --------------------------------------------------------- */
 h1 { font-family: var(--serif); font-weight: 600; font-size: 1.9rem; letter-spacing: .2px; margin: 0 0 .2rem; }
@@ -192,6 +206,40 @@ h2.sez { font-size: .82rem; color: var(--ottone-scuro); text-transform: uppercas
 table.righe-fattura input { padding: .35rem .45rem; }
 table.righe-fattura input.num { text-align: right; font-family: var(--mono); }
 table.righe-fattura td.imp-riga { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+/* Togli una voce dal registro: discreto (e' accanto a ogni riga), ma con l'area
+   cliccabile piena da 28px, perche' si usa anche col tablet in stalla. */
+button.togli {
+  width: 28px; height: 28px; padding: 0; cursor: pointer; line-height: 1;
+  font-size: 1.15rem; font-family: var(--sans);
+  color: var(--nebbia); background: transparent;
+  border: 1px solid transparent; border-radius: 50%;
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.togli:hover { color: var(--err); background: var(--err-bg); border-color: #f0cfca; }
+button.togli:focus-visible { outline: 3px solid var(--ottone); outline-offset: 1px; }
+
+/* Avviso in fondo allo schermo quando il server si e' spento da solo: senza
+   questo, la pagina resterebbe muta e i clic non farebbero piu' niente. */
+.avviso-spento {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 1.2rem;
+  z-index: 50; max-width: min(38rem, calc(100vw - 2rem));
+  background: var(--warn-bg); color: #6d4e14;
+  border: 1px solid #ecd8a6; border-radius: var(--raggio);
+  padding: .8rem 1.1rem; font-size: .92rem; box-shadow: var(--ombra);
+}
+
+/* Le tre mosse per mandare un documento su WhatsApp. */
+ol.passi-invio { margin: 1.2rem 0 0; padding-left: 0; list-style: none; counter-reset: pi; }
+ol.passi-invio li {
+  counter-increment: pi; position: relative; padding-left: 2.4rem; margin-bottom: .7rem;
+}
+ol.passi-invio li::before {
+  content: counter(pi); position: absolute; left: 0; top: 0;
+  width: 1.7rem; height: 1.7rem; border-radius: 50%;
+  border: 1.5px solid var(--verde); color: var(--verde);
+  font-size: .82rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
 .riepilogo { max-width: 400px; margin-left: auto; background: var(--verde-chiaro); border: 1px solid var(--bordo); border-radius: var(--raggio); padding: .8rem 1.1rem; }
 .riepilogo > div { display: flex; justify-content: space-between; gap: 1rem; padding: .28rem 0; font-size: .92rem; }
 .riepilogo b { font-variant-numeric: tabular-nums; font-family: var(--mono); }

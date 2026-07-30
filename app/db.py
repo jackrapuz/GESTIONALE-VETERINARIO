@@ -311,11 +311,30 @@ def _m003_registro_e_cavalli(conn: sqlite3.Connection) -> None:
     )
 
 
+def _m004_invio_whatsapp(conn: sqlite3.Connection) -> None:
+    """v4: l'invio passa da email a WhatsApp.
+
+    ``fatture.whatsapp_at`` registra quando un documento e' stato *preparato* per
+    l'invio (PDF generato e messo negli appunti). Non dice che il cliente l'ha
+    ricevuto: l'ultimo passo avviene dentro WhatsApp e il programma non lo vede.
+
+    Le colonne SMTP di ``studio`` (``smtp_*``, ``invio_auto_email``) e
+    ``fatture.email_inviata_at`` **restano nello schema pur non essendo piu' usate
+    da nessuna parte**: in SQLite togliere una colonna vuol dire ricostruire la
+    tabella, e non vale il rischio su un database che contiene fatture emesse.
+    Sono da considerare morte: nessun codice le legge o le scrive.
+    """
+    conn.executescript(
+        "ALTER TABLE fatture ADD COLUMN whatsapp_at TEXT NOT NULL DEFAULT '';"
+    )
+
+
 # Lista ordinata delle migrazioni. L'indice+1 e' la versione risultante.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _m001_schema_iniziale,
     _m002_proforma_e_invio,
     _m003_registro_e_cavalli,
+    _m004_invio_whatsapp,
 ]
 
 

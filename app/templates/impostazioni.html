@@ -45,27 +45,14 @@
     <div class="campo" style="flex:1 1 100%"><label>Percorso logo (facoltativo)</label><input name="logo_path" value="{{ studio.logo_path }}"></div>
   </div>
 
-  <h2 class="sez">Invio email (SMTP)</h2>
-  <p class="muted" style="margin-top:-.4rem">Serve per inviare le fatture in PDF ai clienti. Le credenziali restano salvate solo su questo computer.</p>
-  <div class="riga">
-    <div class="campo" style="flex:2 1 300px"><label>Server SMTP</label><input name="smtp_host" value="{{ studio.smtp_host }}" placeholder="es. smtp.gmail.com"></div>
-    <div class="campo"><label>Porta</label><input name="smtp_porta" value="{{ studio.smtp_porta }}" placeholder="587"></div>
-    <div class="campo"><label>Sicurezza</label>
-      <select name="smtp_sicurezza">
-        <option value="starttls" {{ 'selected' if studio.smtp_sicurezza == 'starttls' }}>STARTTLS (587)</option>
-        <option value="ssl" {{ 'selected' if studio.smtp_sicurezza == 'ssl' }}>SSL (465)</option>
-        <option value="none" {{ 'selected' if studio.smtp_sicurezza == 'none' }}>Nessuna</option>
-      </select></div>
-  </div>
-  <div class="riga">
-    <div class="campo"><label>Utente</label><input name="smtp_utente" value="{{ studio.smtp_utente }}" autocomplete="off"></div>
-    <div class="campo"><label>Password</label><input type="password" name="smtp_password" value="{{ studio.smtp_password }}" autocomplete="new-password"></div>
-    <div class="campo"><label>Mittente (Da:)</label><input name="smtp_mittente" value="{{ studio.smtp_mittente }}" placeholder="studio@esempio.it"></div>
-  </div>
-  <div class="riga">
-    <div class="campo check"><input type="checkbox" id="invio_auto_email" name="invio_auto_email" {{ 'checked' if studio.invio_auto_email }}>
-      <label for="invio_auto_email">Invia automaticamente la fattura via email all'emissione (se il cliente ha un'email)</label></div>
-  </div>
+  <h2 class="sez">Invio dei documenti (WhatsApp)</h2>
+  <p class="muted" style="margin-top:-.4rem">
+    Qui non c'è niente da impostare: i documenti si mandano con <strong>WhatsApp</strong>,
+    dal pulsante <em>Invia con WhatsApp</em> che trovi su ogni fattura e preventivo.
+    Serve solo che WhatsApp sia collegato a questo computer (app WhatsApp per Windows
+    o <em>web.whatsapp.com</em>), e che il cliente abbia il <strong>numero di telefono</strong>
+    nella sua scheda in <a href="/clienti">Clienti</a>.
+  </p>
 
   <div class="azioni"><button class="btn" type="submit">Salva</button></div>
 </form>

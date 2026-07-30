@@ -7,11 +7,14 @@
   </h1>
   <div class="azioni">
     <a class="btn" href="/preventivi/{{ p.id }}/pdf" target="_blank">Stampa PDF</a>
-    {% if contatti.email %}
-    <form method="post" action="/preventivi/{{ p.id }}/invia-email">
-      <button class="btn secondario" type="submit" title="Invia a {{ contatti.email }}">Invia email</button></form>
+    {% if contatti.telefono %}
+    <form method="post" action="/preventivi/{{ p.id }}/whatsapp">
+      <button class="btn secondario" type="submit"
+              title="Prepara l'invio a {{ contatti.telefono }}">Invia con WhatsApp</button></form>
+    {% else %}
+    <span class="muted" title="Aggiungi il numero nella scheda del cliente">
+      Nessun telefono in anagrafica</span>
     {% endif %}
-    {% if whatsapp %}<a class="btn secondario" href="{{ whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
     <a class="btn secondario" href="/preventivi">← Elenco</a>
   </div>
 </div>

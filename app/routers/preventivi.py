@@ -7,6 +7,7 @@ in :mod:`app.proforma`.
 from __future__ import annotations
 
 from datetime import date
+from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -14,9 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from app.calcolo import q2
 from app.db import get_conn
 from app.fatturazione import gruppi_iva_da_righe
-from app.invio import (
-    ConfigurazioneMancante, invia_email, link_whatsapp, testo_messaggio,
-)
+from app.invio import TelefonoMancante, prepara_invio_whatsapp
 from app.pdf_fattura import genera_pdf_fattura
 from app.proforma import (
     converti_in_fattura, elimina_proforma, emetti_proforma, leggi_proforma,
@@ -125,11 +124,10 @@ def dettaglio(request: Request, pid: int):
     finally:
         conn.close()
     gruppi = gruppi_iva_da_righe(p["righe"], p["enpav_pct"])
-    wa = link_whatsapp(contatti["telefono"], testo_messaggio(studio, p)) if contatti["telefono"] else ""
     return templates.TemplateResponse(
         request, "preventivo_dettaglio.html",
         {"titolo": p["numero_visualizzato"], "p": p, "studio": studio, "gruppi": gruppi,
-         "contatti": contatti, "whatsapp": wa})
+         "contatti": contatti})
 
 
 @router.get("/preventivi/{pid}/pdf")
@@ -149,29 +147,34 @@ def pdf(pid: int):
                     headers={"Content-Disposition": f'inline; filename="{nome}"'})
 
 
-@router.post("/preventivi/{pid}/invia-email")
-def invia_email_route(pid: int):
+@router.post("/preventivi/{pid}/whatsapp", response_class=HTMLResponse)
+def invia_whatsapp(request: Request, pid: int):
+    """Come per le fatture: PDF negli appunti e chat WhatsApp pronta.
+
+    I preventivi non hanno una colonna ``whatsapp_at``: non sono documenti
+    fiscali, quindi non c'e' niente da tracciare.
+    """
     conn = get_conn()
     try:
         p = leggi_proforma(conn, pid)
         studio = leggi_studio(conn)
         if p is None:
             return RedirectResponse("/preventivi?msg=Preventivo+non+trovato", status_code=303)
-        contatti = _contatti(conn, p["cliente_id"])
         gruppi = gruppi_iva_da_righe(p["righe"], p["enpav_pct"])
         pdf_bytes = genera_pdf_fattura(p, studio, gruppi)
+        telefono = _contatti(conn, p["cliente_id"])["telefono"]
         try:
-            invia_email(studio, destinatario=contatti["email"],
-                        oggetto=f"Preventivo n. {p['numero_visualizzato']}",
-                        corpo=testo_messaggio(studio, p),
-                        allegati=[(f"preventivo_{p['numero_visualizzato'].replace('/', '-')}.pdf",
-                                   pdf_bytes, "pdf")])
-            msg = f"Email+inviata+a+{contatti['email']}"
-        except (ConfigurazioneMancante, OSError) as e:
-            msg = f"Errore+invio:+{str(e)[:80]}"
+            esito = prepara_invio_whatsapp(studio, p, pdf_bytes, telefono)
+        except TelefonoMancante as e:
+            return RedirectResponse(
+                f"/preventivi/{pid}?msg={quote_plus(str(e))}", status_code=303)
     finally:
         conn.close()
-    return RedirectResponse(f"/preventivi/{pid}?msg={msg}", status_code=303)
+    return templates.TemplateResponse(
+        request, "invio_whatsapp.html",
+        {"titolo": f"Invio {p['numero_visualizzato']}", "doc": p,
+         "invio": esito, "ritorno": f"/preventivi/{pid}"},
+    )
 
 
 @router.post("/preventivi/{pid}/converti")

@@ -45,7 +45,13 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,          # finestra con il messaggio di avvio; chiuderla ferma l'app
+    # Nessuna finestra del terminale al doppio clic: si apre solo il browser.
+    # Cio' che la console garantiva e' sostituito in app/main.py:
+    #   - stdout/stderr dirottati su dati/avvio.log (senza, uvicorn muore al primo log);
+    #   - errori di avvio mostrati in una finestrella di sistema, non in silenzio;
+    #   - "Chiudi il gestionale" nel piede di ogni pagina, al posto della X sulla console;
+    #   - un secondo doppio clic riapre l'istanza gia' in funzione invece di duplicarla.
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

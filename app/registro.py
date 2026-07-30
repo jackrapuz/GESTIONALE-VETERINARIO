@@ -83,6 +83,31 @@ def annota(
     return int(cur.lastrowid)
 
 
+def elimina_voce(conn: sqlite3.Connection, voce_id: int) -> None:
+    """Cancella una voce del registro, se non e' ancora finita in una fattura.
+
+    Annotare e' un gesto veloce fatto in stalla, quindi si sbaglia: senza questa
+    via d'uscita l'unico rimedio era fatturare l'errore e poi stornarlo con una
+    nota di credito.
+
+    Il limite e' ``fattura_id``: una volta che la voce e' dentro un documento
+    fiscale non si tocca piu' (la fattura non cambia, si storna). Essere legata a
+    una **proforma** invece non blocca nulla: la proforma non e' fiscale e resta
+    valida come documento gia' consegnato.
+    """
+    riga = conn.execute(
+        "SELECT fattura_id FROM prestazioni_eseguite WHERE id=?", (voce_id,)
+    ).fetchone()
+    if riga is None:
+        raise ValueError("Prestazione non trovata.")
+    if riga["fattura_id"] is not None:
+        raise ValueError(
+            "Questa prestazione e' gia' in una fattura: per correggerla serve una "
+            "nota di credito.")
+    with conn:
+        conn.execute("DELETE FROM prestazioni_eseguite WHERE id=?", (voce_id,))
+
+
 def _voci_cliente(conn: sqlite3.Connection, cliente_id: int) -> list[dict]:
     """Voci ancora da fatturare di un cliente (con nome cavallo corrente)."""
     righe = conn.execute(
@@ -213,17 +238,22 @@ def genera_proforma(
     if not voci:
         raise ValueError("Nessuna prestazione da fatturare per questo cliente.")
 
-    esito = emetti_proforma(
+    voci_ids = [v["id"] for v in voci]
+
+    def collega(conn: sqlite3.Connection, proforma_id: int) -> None:
+        conn.executemany(
+            "UPDATE prestazioni_eseguite SET proforma_id=? WHERE id=?",
+            [(proforma_id, i) for i in voci_ids],
+        )
+
+    return emetti_proforma(
         conn,
         cliente=dict(cliente),
         righe=_righe_da_voci(voci),
         data_emissione=date.today().isoformat(),
         sconto_cliente_pct=cliente["sconto_default_pct"] or "0",
         enpav_pct=studio.get("enpav_pct") or "2",
+        # Dentro la transazione, come per la fattura: una proforma non puo'
+        # restare scollegata dalle voci che la compongono.
+        dopo_inserimento=collega,
     )
-    with conn:
-        conn.executemany(
-            "UPDATE prestazioni_eseguite SET proforma_id=? WHERE id=?",
-            [(esito["id"], v["id"]) for v in voci],
-        )
-    return esito

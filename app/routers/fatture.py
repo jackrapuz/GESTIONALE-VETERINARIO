@@ -7,6 +7,7 @@ la resa delle pagine.
 from __future__ import annotations
 
 from datetime import date
+from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -16,9 +17,7 @@ from app.db import get_conn
 from app.fatturazione import (
     denominazione_cliente, emetti_fattura, gruppi_iva_da_righe, leggi_fattura,
 )
-from app.invio import (
-    ConfigurazioneMancante, invia_email, link_whatsapp, testo_messaggio,
-)
+from app.invio import TelefonoMancante, prepara_invio_whatsapp
 from app.numerazione import verifica_continuita
 from app.pdf_fattura import genera_pdf_fattura
 from app.routers.impostazioni import leggi_studio
@@ -30,7 +29,7 @@ MODALITA_PAGAMENTO = ["Bonifico", "Contanti", "Carta", "Assegno", "POS", "Altro"
 
 
 def _contatti(conn, cliente_id) -> dict:
-    """Email e telefono del cliente (per invio email/WhatsApp)."""
+    """Telefono (per WhatsApp) ed email del cliente, come dato di anagrafica."""
     if cliente_id is None:
         return {"email": "", "telefono": ""}
     row = conn.execute("SELECT email, telefono FROM clienti WHERE id=?", (cliente_id,)).fetchone()
@@ -38,21 +37,21 @@ def _contatti(conn, cliente_id) -> dict:
             "telefono": (row["telefono"] if row else "") or ""}
 
 
-def _invia_email_documento(conn, studio: dict, f: dict) -> None:
-    """Genera il PDF del documento e lo invia via email al cliente. Puo' sollevare."""
+def _prepara_whatsapp(conn, studio: dict, f: dict) -> dict:
+    """Genera il PDF, lo mette negli appunti e segna la data di preparazione.
+
+    ``whatsapp_at`` dice "questo documento e' stato preparato per l'invio", non
+    "e' arrivato": l'ultimo invio lo fa lei dentro WhatsApp, e il programma non
+    ha modo di saperlo.
+    """
     gruppi = gruppi_iva_da_righe(f["righe"], f["enpav_pct"])
     pdf = genera_pdf_fattura(f, studio, gruppi)
-    contatti = _contatti(conn, f["cliente_id"])
-    nome = f"{f['tipo_documento']}_{f['numero_visualizzato'].replace('/', '-')}.pdf"
-    invia_email(
-        studio, destinatario=contatti["email"],
-        oggetto=f"{'Fattura' if f['tipo_documento']=='fattura' else 'Documento'} "
-                f"n. {f['numero_visualizzato']}",
-        corpo=testo_messaggio(studio, f),
-        allegati=[(nome, pdf, "pdf")])
+    telefono = _contatti(conn, f["cliente_id"])["telefono"]
+    esito = prepara_invio_whatsapp(studio, f, pdf, telefono)
     with conn:
-        conn.execute("UPDATE fatture SET email_inviata_at=datetime('now','localtime') WHERE id=?",
+        conn.execute("UPDATE fatture SET whatsapp_at=datetime('now','localtime') WHERE id=?",
                      (f["id"],))
+    return esito
 
 
 # ---------------------------------------------------------------------------
@@ -249,22 +248,13 @@ async def crea(request: Request):
             formato_numerazione=studio.get("formato_numerazione") or "{n}/{anno}",
         )
 
-        # Invio email opzionale subito dopo l'emissione (richiesto dal form o
-        # impostazione "invio automatico"). Un errore d'invio NON annulla la
-        # fattura, gia' emessa: viene solo segnalato.
-        msg_extra = ""
-        vuole_email = bool(form.get("invia_email")) or int(studio.get("invio_auto_email") or 0)
-        if vuole_email:
-            f = leggi_fattura(conn, esito["id"])
-            try:
-                _invia_email_documento(conn, studio, f)
-                msg_extra = "+e+inviata+via+email"
-            except (ConfigurazioneMancante, OSError) as e:
-                msg_extra = f"+(email+non+inviata:+{str(e)[:60]})"
+        # Nessun invio automatico all'emissione: mandare il documento su WhatsApp
+        # richiede comunque un gesto suo dentro l'app di messaggistica, quindi
+        # farlo partire da qui darebbe solo l'illusione che sia partito.
     finally:
         conn.close()
     return RedirectResponse(
-        f"/fatture/{esito['id']}?msg=Fattura+{esito['numero_visualizzato']}+emessa{msg_extra}",
+        f"/fatture/{esito['id']}?msg=Fattura+{esito['numero_visualizzato']}+emessa",
         status_code=303)
 
 
@@ -284,13 +274,10 @@ def dettaglio(request: Request, fid: int):
         contatti = _contatti(conn2, fattura["cliente_id"])
     finally:
         conn2.close()
-    wa = link_whatsapp(contatti["telefono"], testo_messaggio(studio, fattura)) if contatti["telefono"] else ""
     return templates.TemplateResponse(
         request, "fattura_dettaglio.html",
         {"titolo": fattura["numero_visualizzato"], "f": fattura, "studio": studio,
-         "gruppi": gruppi, "modalita": MODALITA_PAGAMENTO,
-         "contatti": contatti, "whatsapp": wa,
-         "smtp_ok": bool((studio.get("smtp_host") or "").strip())},
+         "gruppi": gruppi, "modalita": MODALITA_PAGAMENTO, "contatti": contatti},
     )
 
 
@@ -314,8 +301,9 @@ def pdf(fid: int):
     )
 
 
-@router.post("/fatture/{fid}/invia-email")
-def invia_email_route(fid: int):
+@router.post("/fatture/{fid}/whatsapp", response_class=HTMLResponse)
+def invia_whatsapp(request: Request, fid: int):
+    """Prepara l'invio WhatsApp e mostra la pagina con le due mosse finali."""
     conn = get_conn()
     try:
         f = leggi_fattura(conn, fid)
@@ -323,13 +311,16 @@ def invia_email_route(fid: int):
         if f is None:
             return RedirectResponse("/fatture?msg=Documento+non+trovato", status_code=303)
         try:
-            _invia_email_documento(conn, studio, f)
-            msg = f"Email+inviata+a+{_contatti(conn, f['cliente_id'])['email']}"
-        except (ConfigurazioneMancante, OSError) as e:
-            msg = f"Errore+invio:+{str(e)[:80]}"
+            esito = _prepara_whatsapp(conn, studio, f)
+        except TelefonoMancante as e:
+            return RedirectResponse(f"/fatture/{fid}?msg={quote_plus(str(e))}", status_code=303)
     finally:
         conn.close()
-    return RedirectResponse(f"/fatture/{fid}?msg={msg}", status_code=303)
+    return templates.TemplateResponse(
+        request, "invio_whatsapp.html",
+        {"titolo": f"Invio {f['numero_visualizzato']}", "doc": f,
+         "invio": esito, "ritorno": f"/fatture/{fid}"},
+    )
 
 
 @router.post("/fatture/{fid}/stato")

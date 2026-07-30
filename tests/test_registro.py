@@ -4,7 +4,9 @@ import sqlite3
 import pytest
 
 from app.db import get_conn, init_db
-from app.registro import annota, da_fatturare, genera_fattura, genera_proforma
+from app.registro import (
+    annota, da_fatturare, elimina_voce, genera_fattura, genera_proforma,
+)
 
 
 @pytest.fixture()
@@ -131,6 +133,45 @@ def test_proforma_non_consuma_le_voci(conn):
     assert n_proforma == 3
 
 
+# --- correzione di un'annotazione sbagliata ---------------------------------
+
+def test_elimina_voce_non_fatturata(conn):
+    _annota_mensile(conn)
+    voci = da_fatturare(conn)[0]["voci"]
+    elimina_voce(conn, voci[0]["id"])
+    restanti = da_fatturare(conn)[0]["voci"]
+    assert len(restanti) == 2
+    assert voci[0]["id"] not in {v["id"] for v in restanti}
+
+
+def test_eliminare_una_voce_gia_fatturata_e_vietato(conn):
+    """Dentro una fattura la voce non si tocca piu': si storna, non si cancella."""
+    _annota_mensile(conn)
+    esito = genera_fattura(conn, 1, _studio(conn))
+    voce_id = conn.execute(
+        "SELECT id FROM prestazioni_eseguite WHERE fattura_id=? LIMIT 1", (esito["id"],)
+    ).fetchone()["id"]
+    with pytest.raises(ValueError, match="nota di credito"):
+        elimina_voce(conn, voce_id)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM prestazioni_eseguite WHERE id=?", (voce_id,)
+    ).fetchone()[0] == 1
+
+
+def test_eliminare_una_voce_inesistente_solleva(conn):
+    with pytest.raises(ValueError):
+        elimina_voce(conn, 999)
+
+
+def test_una_voce_in_proforma_si_puo_ancora_eliminare(conn):
+    """La proforma non e' fiscale: se la prestazione era sbagliata si toglie."""
+    _annota_mensile(conn)
+    genera_proforma(conn, 1, _studio(conn))
+    voce_id = da_fatturare(conn)[0]["voci"][0]["id"]
+    elimina_voce(conn, voce_id)
+    assert len(da_fatturare(conn)[0]["voci"]) == 2
+
+
 # --- sconto di anagrafica: i due percorsi devono coincidere -----------------
 
 def test_lo_sconto_del_cliente_vale_anche_fatturando_dal_registro(conn):
@@ -184,3 +225,37 @@ def test_la_proforma_dal_registro_applica_lo_stesso_sconto(conn):
            quantita="1", prezzo_unitario="100.00", aliquota_iva="22.00")
     esito = genera_proforma(conn, 2, {"enpav_pct": "2"})
     assert str(esito["risultato"].imponibile) == "90.00"
+
+
+def test_la_proforma_non_puo_restare_scollegata_dalle_voci(conn):
+    """Se il collegamento delle voci fallisce, non deve restare una proforma orfana.
+
+    Il collegamento gira dentro la stessa transazione dell'emissione: un errore li'
+    annulla tutto, proforma compresa.
+    """
+    import app.registro as reg
+
+    annota(conn, data_prestazione="2026-07-30", cliente_id=2, descrizione="Visita",
+           quantita="1", prezzo_unitario="100.00", aliquota_iva="22.00")
+    prima = conn.execute("SELECT COUNT(*) FROM proforme").fetchone()[0]
+
+    originale = reg.emetti_proforma
+
+    def esplodi(conn_, **kw):
+        def rompi(c, pid):
+            raise RuntimeError("collegamento fallito")
+        kw["dopo_inserimento"] = rompi
+        return originale(conn_, **kw)
+
+    reg.emetti_proforma = esplodi
+    try:
+        with pytest.raises(RuntimeError):
+            genera_proforma(conn, 2, {"enpav_pct": "2"})
+    finally:
+        reg.emetti_proforma = originale
+
+    assert conn.execute("SELECT COUNT(*) FROM proforme").fetchone()[0] == prima, \
+        "la proforma e' rimasta anche se il collegamento e' fallito"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM prestazioni_eseguite WHERE proforma_id IS NOT NULL"
+    ).fetchone()[0] == 0

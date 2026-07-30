@@ -35,7 +35,8 @@
   </div>
   <table class="righe-fattura">
     <thead><tr><th style="width:14%">Data</th><th style="width:22%">Cavallo</th>
-      <th>Prestazione</th><th class="num" style="width:16%">Importo</th></tr></thead>
+      <th>Prestazione</th><th class="num" style="width:16%">Importo</th>
+      <th style="width:1%"></th></tr></thead>
     <tbody>
       {% for v in g.voci %}
       <tr>
@@ -43,12 +44,19 @@
         <td>{{ v.paziente_nome_corrente or '—' }}</td>
         <td>{{ v.descrizione }}</td>
         <td class="num">{{ v.importo|euro }}</td>
+        {# Finche' non e' fatturata, una voce annotata per errore si puo' togliere. #}
+        {# Niente descrizione dentro il confirm: un apostrofo la spezzerebbe. #}
+        <td><form method="post" action="/registro/voce/{{ v.id }}/elimina"
+              onsubmit="return confirm('Togliere questa prestazione dal registro?\n\nNon è ancora fatturata, quindi non resta traccia.');">
+            <button type="submit" class="togli" title="Togli dal registro"
+                    aria-label="Togli dal registro">&times;</button>
+          </form></td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr><td colspan="3" class="num"><strong>Totale da fatturare</strong></td>
-        <td class="num"><strong>{{ g.totale|euro }}</strong></td></tr>
+        <td class="num"><strong>{{ g.totale|euro }}</strong></td><td></td></tr>
     </tfoot>
   </table>
 </div>
