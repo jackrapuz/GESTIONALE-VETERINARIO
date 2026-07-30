@@ -162,14 +162,23 @@ def _raggruppa_per_cavallo(righe: list[dict]) -> list[tuple[str, list[dict]]]:
 
 
 def _tabella_righe(f: dict, ss) -> Table:
-    """Tabella righe VERSO IL CLIENTE: solo Data, Descrizione, Q.tà, Importo.
+    """Tabella righe VERSO IL CLIENTE: Data, Descrizione, Q.tà, Importo.
 
-    Prezzo di listino, sconto e aliquota NON compaiono qui (sono informazioni
-    dell'emittente: restano nell'app e nel riepilogo IVA sotto). L'importo e' il
-    praticato (``imponibile_riga``). Le righe sono raggruppate per cavallo, con
-    una riga-intestazione per gruppo e la data all'inizio di ogni prestazione.
+    Prezzo di listino e sconto NON compaiono qui: sono informazioni dell'emittente
+    e restano nell'app. L'importo e' il praticato (``imponibile_riga``). Le righe
+    sono raggruppate per cavallo, con una riga-intestazione per gruppo e la data
+    all'inizio di ogni prestazione.
+
+    L'aliquota compare **solo se il documento ne ha piu' d'una**. Con un'aliquota
+    sola la dice gia' il riepilogo qui sotto e ripeterla a ogni riga e' rumore; con
+    piu' aliquote, invece, senza quella colonna il cliente non puo' sapere quale
+    importo sta a quale aliquota, e il documento non e' riconciliabile.
     """
-    intest = ["Data", "Descrizione", "Q.tà", "Importo"]
+    aliquote = {str(r.get("aliquota_iva")) for r in f["righe"]}
+    mostra_iva = len(aliquote) > 1
+
+    intest = ["Data", "Descrizione", "Q.tà"] + (["IVA%"] if mostra_iva else []) + ["Importo"]
+    n_col = len(intest)
     dati = [intest]
     stile = [
         ("BACKGROUND", (0, 0), (-1, 0), _TINTA),
@@ -185,21 +194,26 @@ def _tabella_righe(f: dict, ss) -> Table:
     r_idx = 0  # indice della prossima riga da inserire in ``dati``
     for nome_cavallo, righe in _raggruppa_per_cavallo(f["righe"]):
         if nome_cavallo:
-            dati.append([Paragraph(f"<b>{nome_cavallo}</b>", ss["Corpo"]), "", "", ""])
+            dati.append([Paragraph(f"<b>{nome_cavallo}</b>", ss["Corpo"])] + [""] * (n_col - 1))
             r_idx += 1
             stile.append(("SPAN", (0, r_idx), (-1, r_idx)))
             stile.append(("BACKGROUND", (0, r_idx), (-1, r_idx), _TINTA))
             stile.append(("TEXTCOLOR", (0, r_idx), (-1, r_idx), _VERDE))
         for r in righe:
-            dati.append([
+            riga = [
                 data_it(r.get("data_prestazione")),
                 Paragraph(r["descrizione"], ss["Corpo"]),
                 euro(r["quantita"]) if "." in str(r["quantita"]) else str(r["quantita"]),
-                euro(r["imponibile_riga"]),
-            ])
+            ]
+            if mostra_iva:
+                riga.append(_pulisci(r["aliquota_iva"]))
+            riga.append(euro(r["imponibile_riga"]))
+            dati.append(riga)
             r_idx += 1
             stile.append(("LINEBELOW", (0, r_idx), (-1, r_idx), 0.3, _BORDO))
-    t = Table(dati, colWidths=[26 * mm, 104 * mm, 18 * mm, 22 * mm], repeatRows=1)
+    larghezze = ([26 * mm, 104 * mm, 18 * mm, 22 * mm] if not mostra_iva
+                 else [26 * mm, 90 * mm, 18 * mm, 14 * mm, 22 * mm])
+    t = Table(dati, colWidths=larghezze, repeatRows=1)
     t.setStyle(TableStyle(stile))
     return t
 
