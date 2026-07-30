@@ -163,10 +163,47 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
   <section>
     <div class="testata">
       <div class="occhiello">Da fare una volta sola</div>
-      <h2>Il primo giorno</h2>
+      <h2>Installazione e primo giorno</h2>
     </div>
+
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">0</span>
+      <div class="caso__cima"><span class="caso__n">1</span>
+        <h3>Mettere il programma sul computer</h3></div>
+      <p class="situazione">&laquo;Giacomo mi ha dato il programma. Cosa devo fare per
+      averlo sul mio computer?&raquo;</p>
+      <ol class="passi">
+        <li>Crea una cartella sul computer &mdash; per esempio <strong>C:\Gestionale</strong>
+          &mdash; e copiaci dentro i tre file: <strong>Gestionale.exe</strong> (il programma),
+          <strong>crea_collegamento.bat</strong> e <strong>GUIDA.html</strong> (questa guida).</li>
+        <li>Doppio clic su <strong>crea_collegamento.bat</strong>: mette sul Desktop l'icona
+          <em>Gestionale Studio</em>. Scrive "Fatto" e si chiude premendo un tasto.</li>
+        <li>Doppio clic sull'icona. Si apre il browser sul gestionale: quella &egrave;
+          l'applicazione. Ogni avvio richiede qualche secondo, il primo un po' di pi&ugrave;.</li>
+        <li>Se compare un riquadro blu <strong>"Windows ha protetto il PC"</strong>, non &egrave;
+          un virus: capita a tutti i programmi non registrati presso Microsoft. Clicca
+          <strong>Ulteriori informazioni</strong> e poi <strong>Esegui comunque</strong>.
+          Lo chiede una volta sola.</li>
+      </ol>
+      <div class="nota nota--attenzione">
+        <span class="nota__i">&#9888;</span>
+        <div><strong>Non metterlo in OneDrive, Dropbox o Google Drive.</strong> I tuoi dati
+        stanno in una cartella <strong>dati</strong> accanto al programma, e le cartelle
+        sincronizzate copiano i file <em>mentre</em> il programma li sta scrivendo: si
+        rischia di rovinare l'archivio delle fatture. Una cartella normale del computer &egrave;
+        il posto giusto. Per avere una copia altrove c'&egrave; il <strong>Backup</strong>
+        (caso 11), che &egrave; il modo sicuro di farlo.</div>
+      </div>
+      <p class="risultato"><b>Se un giorno lo sposti &rarr;</b> sposta <strong>tutta la
+      cartella</strong>, non solo il programma: i tuoi dati sono nella cartella
+      <strong>dati</strong> che gli sta accanto. Poi ridai doppio clic su
+      <em>crea_collegamento.bat</em> per rifare l'icona.</p>
+      <p class="dim piccolo">Se l'antivirus si insospettisce del programma &egrave; un falso
+      allarme (succede con i programmi costruiti cos&igrave;): chiedi a Giacomo prima di
+      cancellare qualcosa.</p>
+    </div>
+
+    <div class="caso">
+      <div class="caso__cima"><span class="caso__n">2</span>
         <h3>Prepara il programma</h3></div>
       <ol class="passi">
         <li>Vai su <kbd>Impostazioni</kbd> e inserisci i tuoi dati: denominazione,
@@ -194,7 +231,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">0<span class="dim">bis</span></span>
+      <div class="caso__cima"><span class="caso__n">3</span>
         <h3>Collega WhatsApp al computer</h3></div>
       <p class="situazione">&laquo;I documenti li mando su WhatsApp. Devo aprire un
       account nuovo? Devo pagare qualcosa?&raquo;</p>
@@ -230,7 +267,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">1</span>
+      <div class="caso__cima"><span class="caso__n">4</span>
         <h3>Una visita e basta, la fatturi subito</h3></div>
       <p class="situazione">&laquo;Mi chiama una signora che non ho mai visto, vado a
       vedere il cavallo, faccio un'ecografia. Voglio darle la fattura e chiuderla l&igrave;.&raquo;</p>
@@ -246,11 +283,11 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
       <p class="risultato"><b>Cosa ottieni &rarr;</b> La fattura &egrave; emessa e numerata.
       Si apre da sola: premi <span class="bottone">Stampa PDF</span> per stamparla,
       oppure <span class="bottone chiaro">Invia con WhatsApp</span> per mandarla
-      (vedi il caso 3).</p>
+      (vedi il caso 6).</p>
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">2</span>
+      <div class="caso__cima"><span class="caso__n">5</span>
         <h3>Un cliente con pi&ugrave; cavalli, che paga a fine mese</h3></div>
       <p class="situazione">&laquo;Dalla signora Rossi ci vado di continuo: ha due cavalli
       e nel mese ci passo tre o quattro volte. Le faccio una fattura sola alla fine.&raquo;</p>
@@ -303,7 +340,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">3</span>
+      <div class="caso__cima"><span class="caso__n">6</span>
         <h3>Mandare la fattura al cliente su WhatsApp</h3></div>
       <p class="situazione">&laquo;La fattura &egrave; pronta. Gliela mando su WhatsApp, come
       faccio sempre.&raquo;</p>
@@ -334,7 +371,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">4</span>
+      <div class="caso__cima"><span class="caso__n">7</span>
         <h3>Il cliente vuole sapere prima quanto viene</h3></div>
       <p class="situazione">&laquo;Prima di partire con un ciclo di onde d'urto, il
       proprietario mi chiede un'idea della spesa.&raquo;</p>
@@ -360,7 +397,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">5</span>
+      <div class="caso__cima"><span class="caso__n">8</span>
         <h3>Il cliente ti paga</h3></div>
       <p class="situazione">&laquo;Mi &egrave; arrivato il bonifico della fattura di giugno.&raquo;</p>
       <ol class="passi">
@@ -388,7 +425,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">6</span>
+      <div class="caso__cima"><span class="caso__n">9</span>
         <h3>Dare i numeri al commercialista</h3></div>
       <ol class="passi">
         <li><kbd>Esportazioni</kbd> &rarr; in alto scegli il periodo (<strong>Dal</strong> /
@@ -401,7 +438,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">7</span>
+      <div class="caso__cima"><span class="caso__n">10</span>
         <h3>Il Sistema Tessera Sanitaria</h3></div>
       <ol class="passi">
         <li><kbd>Esportazioni</kbd> &rarr; imposta il periodo, poi sezione
@@ -422,7 +459,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
     </div>
 
     <div class="caso">
-      <div class="caso__cima"><span class="caso__n">8</span>
+      <div class="caso__cima"><span class="caso__n">11</span>
         <h3>Mettere al sicuro i dati</h3></div>
       <ol class="passi">
         <li><kbd>Backup</kbd> &rarr; <span class="bottone">Crea backup</span>.</li>
@@ -443,16 +480,16 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
       <h2>Quando hai finito</h2>
     </div>
     <div class="caso">
-      <p><strong>Chiudi il browser e basta.</strong> Il gestionale si accorge che non
-      ci sono pi&ugrave; pagine aperte e <strong>si spegne da solo</strong> dopo qualche
-      minuto. Non devi fare altro.</p>
-      <p>Se vuoi chiuderlo subito, in fondo a ogni pagina c'&egrave; il pulsante
-        <span class="bottone chiaro">&#9211; Chiudi il gestionale</span>.</p>
+      <p><strong>Chiudi la finestra del browser e basta.</strong> Il gestionale si
+      accorge che non ci sono pi&ugrave; pagine aperte e <strong>si spegne da
+      solo</strong>. Non devi fare altro.</p>
+      <p>Se vuoi chiuderlo subito senza chiudere il browser, in fondo a ogni pagina
+        c'&egrave; il pulsante <span class="bottone chiaro">&#9211; Chiudi il gestionale</span>.</p>
       <div class="nota nota--info">
         <span class="nota__i">&#10003;</span>
-        <div>Pu&ograve; capitare, se lasci la pagina aperta e non la guardi per molto tempo,
-        che si spenga da solo: te lo scrive in fondo allo schermo. Non &egrave; un guaio e
-        <strong>non si perde niente</strong> &mdash; riaprilo col doppio clic sull'icona.</div>
+        <div>Puoi lasciarlo aperto <strong>quanto vuoi</strong> &mdash; tutta la
+        giornata, mentre fai altro al computer. Finch&eacute; la pagina resta aperta il
+        gestionale resta acceso, anche se non lo guardi per ore.</div>
       </div>
     </div>
   </section>
@@ -470,7 +507,7 @@ td.x { text-align:center; color:var(--nebbia); font-size:1.05rem; }
           scheda e ridai doppio clic sull'icona.</li>
         <li><strong>Premo "Apri WhatsApp" e non si apre niente.</strong> Vuol dire che
           WhatsApp non &egrave; collegato a questo computer: rifai il caso
-          <strong>0bis</strong>. Controlla anche che il telefono sia accesso e connesso.</li>
+          <strong>3</strong>. Controlla anche che il telefono sia accesso e connesso.</li>
         <li><strong>Ho premuto Ctrl+V e non si allega nulla.</strong> Clicca prima
           <em>dentro</em> il campo del messaggio, poi riprova. Se ancora niente, allega il
           PDF con la <strong>graffetta</strong>: lo trovi nella cartella

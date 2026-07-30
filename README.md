@@ -29,27 +29,46 @@ separati.
 3. Per **chiudere** il programma: pulsante **"Chiudi il gestionale"** in fondo a
    qualsiasi pagina, **oppure semplicemente chiudi il browser** — vedi sotto.
 
-### Spegnimento automatico
+### Vive quanto vive la finestra del browser
 Senza console, chiudere il browser lasciava il server vivo e **invisibile**: nessun
 segno che fosse acceso e nessun modo di fermarlo se non il Gestione attività (con
 l'effetto collaterale che il file `Gestionale.exe` resta bloccato e non si può
 sostituire con un nuovo build).
 
-Ora ogni pagina aperta manda un **battito** a `POST /battito` ogni 30 secondi (più
-un battito immediato quando la scheda torna in primo piano). Un thread demone
-(`_guardiano` in `app/main.py`) spegne il server se non sente nulla per
-`GRAZIA_SECONDI` (180 s). Vale come battito **qualunque** richiesta, via middleware:
-così non si spegne mentre lo si usa da una pagina vecchia rimasta in cache.
+Il primo tentativo era un **battito a timer** dalla pagina. Sbagliato: il gestionale
+si tiene aperto tutto il giorno mentre si lavora ad altro, e così la vita del
+programma dipendeva da un timer JavaScript in una scheda in secondo piano — che
+Chrome rallenta, e che in certi casi (scheda scartata per memoria, sospensione del
+computer) ferma del tutto. Il programma si spegneva con la pagina ancora aperta.
 
-Conseguenze da conoscere:
-- il conto alla rovescia parte dall'avvio, così il browser ha tutta la finestra di
-  grazia per aprirsi;
-- se Chrome **congela** una scheda in background per molti minuti, il programma può
-  spegnersi con la pagina ancora aperta. In quel caso il battito successivo
-  fallisce e la pagina mostra da sé l'avviso *"Il gestionale si è chiuso perché non
-  era in uso"*, invece di lasciare clic che non fanno niente;
-- la pagina di commiato (`spento.html`) riceve `senza_battito`: non deve battere
-  verso un server che sta morendo.
+Ora vale una **connessione aperta**:
+
+- ogni pagina tiene un flusso SSE su **`GET /presenza`** (`base.html`, `EventSource`);
+- il server **conta i flussi** (`pagine_aperte()` in `app/main.py`). Finché ce n'è
+  almeno uno il gestionale vive, **senza limiti di tempo**;
+- chiudendo la finestra è il sistema operativo a chiudere la connessione. Il flusso
+  se ne accorge con `request.is_disconnected()` e decrementa il contatore;
+- `_guardiano` (thread demone) spegne quando il contatore è a zero **e** non
+  arrivano richieste da `GRAZIA_SECONDI` (30 s). La doppia condizione copre la
+  pagina vecchia rimasta in cache, senza il flusso.
+
+Nessun timer nella pagina, quindi la limitazione delle schede nascoste non conta.
+
+**Due trappole, entrambe già pagate:**
+
+1. **`timeout_graceful_shutdown=3` nella `uvicorn.Config` non è decorativo.** Il
+   default è `None`: uvicorn aspetta *senza limite* che le richieste in corso
+   finiscano, e `/presenza` è fatto per non finire mai — "Chiudi il gestionale"
+   resterebbe appeso per sempre. Il flusso molla da sé controllando `should_exit`;
+   il timeout è la rete di sicurezza. C'è un test che verifica entrambe le cose.
+2. **`TestClient` non serve a provare il flusso**: chiudendo la risposta aspetta che
+   il generatore finisca, e il generatore aspetta il segnale di scollegamento che
+   arriverebbe solo dopo — si bloccano a vicenda e il test si appende. In
+   `tests/test_avvio.py` la presenza si prova con un **uvicorn vero** e un socket
+   (fixture `server_vero`), che è anche il percorso del browser.
+
+La pagina di commiato (`spento.html`) riceve `senza_presenza`: non deve aprire un
+flusso verso un server che sta morendo.
 
 La prima volta viene creata accanto all'exe la cartella **`dati`** con il database.
 Se l'avvio fallisce non c'è una console dove leggere l'errore: compare una
@@ -216,6 +235,17 @@ Consiglio: fai un backup periodico e conservane una copia fuori dal PC.
 Con Python 3.12: doppio clic su **`costruisci_exe.bat`**. Al termine trovi
 `dist\Gestionale.exe`. Copialo dove vuoi: al primo avvio creerà accanto a sé la
 cartella `dati`.
+
+**Se il build fallisce con `PermissionError: [WinError 5]` su `dist\Gestionale.exe`**,
+il file è in uso. Due cause, in ordine di frequenza:
+
+1. **Il gestionale è in esecuzione.** Non serve il Gestione attività: chiudilo dal
+   pulsante *"Chiudi il gestionale"*, oppure con `POST /spegni` sulla porta su cui
+   ascolta (`Get-NetTCPConnection -State Listen -OwningProcess <pid>` per trovarla).
+2. **È appena stato chiuso.** Il bootloader onefile di PyInstaller resta ancora
+   **15-30 secondi** a ripulire la propria cartella temporanea, e in quel tempo il
+   file è bloccato. Non è un processo orfano: esce da solo. Aspetta mezzo minuto e
+   ribuilda.
 
 ## 11. Note fiscali
 

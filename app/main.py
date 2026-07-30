@@ -6,6 +6,7 @@ sia come exe PyInstaller.
 """
 from __future__ import annotations
 
+import asyncio
 import socket
 import sys
 import threading
@@ -16,8 +17,8 @@ from decimal import Decimal
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.db import DATI_DIR, get_conn, init_db
@@ -25,15 +26,35 @@ from app.templating import templates
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# --- Spegnimento automatico quando nessuno lo sta usando --------------------
+# --- Vive quanto vive la finestra del browser -------------------------------
 # Senza finestra del terminale, chiudere il browser lasciava il server vivo e
-# invisibile: nessun segno che fosse acceso, e l'unico modo di fermarlo era il
-# Gestione attivita' di Windows. Ora ogni pagina aperta manda un "battito": se
-# non ne arrivano piu' (browser chiuso), il gestionale si spegne da se'.
-GRAZIA_SECONDI = 180.0     # silenzio tollerato prima di spegnersi
-INTERVALLO_CONTROLLO = 20.0  # ogni quanto il guardiano ricontrolla
+# invisibile: nessun segno che fosse acceso, l'unico modo di fermarlo era il
+# Gestione attivita' di Windows, e intanto teneva bloccato Gestionale.exe.
+#
+# Il primo tentativo era un "battito" a timer dalla pagina. Sbagliato: il
+# gestionale si tiene aperto tutto il giorno mentre si lavora ad altro, e la vita
+# del programma finiva per dipendere da un timer JavaScript in una scheda in
+# secondo piano — che Chrome rallenta, e in certi casi (scheda scartata per
+# memoria, sospensione del computer) ferma del tutto. Il programma si spegneva
+# con la pagina ancora aperta.
+#
+# Ora vale una **connessione aperta**: ogni pagina tiene un flusso SSE verso
+# /presenza e il server conta i flussi. Finche' ce n'e' almeno uno il gestionale
+# vive, senza limiti di tempo e senza chiedere niente al JavaScript. Quando la
+# finestra si chiude, il sistema operativo chiude la connessione e il server se
+# ne accorge da se'.
+GRAZIA_SECONDI = 30.0        # zero pagine tollerato prima di spegnersi
+INTERVALLO_CONTROLLO = 5.0   # ogni quanto il guardiano ricontrolla
+INTERVALLO_KEEPALIVE = 15.0  # ogni quanto il flusso manda un segno di vita
 
-# Orologio monotono: immune ai cambi di ora del sistema.
+# Pagine attualmente collegate. Il contatore viene toccato dal loop asincrono
+# (apertura/chiusura dei flussi) e letto dal thread del guardiano: il lock evita
+# di ragionare su cosa sia atomico e cosa no.
+_pagine_aperte = 0
+_lucchetto = threading.Lock()
+
+# Ultima richiesta ricevuta, orologio monotono (immune ai cambi di ora). E' il
+# secondo segnale: copre la pagina vecchia rimasta in cache, senza il flusso.
 _ultima_vita: float = time.monotonic()
 
 
@@ -43,16 +64,43 @@ def segna_vita() -> None:
     _ultima_vita = time.monotonic()
 
 
+def _entra_pagina() -> int:
+    global _pagine_aperte
+    with _lucchetto:
+        _pagine_aperte += 1
+        return _pagine_aperte
+
+
+def _esce_pagina() -> int:
+    global _pagine_aperte
+    with _lucchetto:
+        _pagine_aperte = max(0, _pagine_aperte - 1)
+        return _pagine_aperte
+
+
+def pagine_aperte() -> int:
+    """Quante pagine del gestionale sono aperte in questo momento."""
+    with _lucchetto:
+        return _pagine_aperte
+
+
 def _guardiano(server: uvicorn.Server) -> None:
-    """Spegne il server quando non si sente piu' nessuno.
+    """Spegne il server quando non c'e' piu' nessuna pagina aperta.
+
+    Servono **entrambe** le condizioni: nessun flusso collegato e nessuna
+    richiesta recente. Il tempo di grazia copre il buco di un istante mentre si
+    passa da una pagina all'altra, quando il vecchio flusso e' gia' chiuso e il
+    nuovo non e' ancora partito.
 
     Gira come thread demone: se il server muore per altre vie, non trattiene il
     processo in vita.
     """
     while not server.should_exit:
         time.sleep(INTERVALLO_CONTROLLO)
+        if pagine_aperte() > 0:
+            continue
         if time.monotonic() - _ultima_vita > GRAZIA_SECONDI:
-            print("Nessuna pagina aperta da un po': il gestionale si spegne.")
+            print("Nessuna pagina aperta: il gestionale si spegne.")
             server.should_exit = True
             return
 
@@ -109,9 +157,9 @@ def create_app() -> FastAPI:
     async def tieni_in_vita(request: Request, call_next):
         """Qualunque richiesta vale come segno di vita.
 
-        Cosi' il programma non si spegne mentre lo si sta usando anche se il
-        battito della pagina non arrivasse (JavaScript disattivato, pagina vecchia
-        rimasta in cache).
+        E' il secondo segnale, accanto al flusso di presenza: cosi' il programma
+        non si spegne mentre lo si sta usando anche se il flusso non ci fosse
+        (JavaScript disattivato, pagina vecchia rimasta in cache).
         """
         segna_vita()
         return await call_next(request)
@@ -143,14 +191,47 @@ def create_app() -> FastAPI:
         """Serve a un secondo avvio per riconoscere che il gestionale gira gia'."""
         return "gestionale-veterinario"
 
-    @app.post("/battito")
-    def battito():
-        """Segnale periodico delle pagine aperte: "sono ancora qui".
+    @app.get("/presenza")
+    async def presenza(request: Request):
+        """Flusso che resta aperto quanto la pagina: e' il segno che c'e' qualcuno.
 
-        Il lavoro lo fa il middleware; questa rotta esiste per dare al browser
-        qualcosa di leggerissimo da chiamare ogni mezzo minuto.
+        Non serve che il browser faccia nulla: basta che la connessione esista.
+        Quando la finestra si chiude e' il sistema operativo a chiuderla, quindi
+        funziona anche se la scheda era in secondo piano da ore.
+
+        Il ciclo si interrompe per due motivi, e servono entrambi:
+
+        - ``request.is_disconnected()``: la pagina se n'e' andata. Senza questo
+          controllo il flusso continuerebbe a girare a vuoto e il contatore
+          resterebbe alto, cioe' il gestionale non si spegnerebbe mai piu'.
+        - ``should_exit``: il server sta chiudendo. Un flusso fatto per non
+          finire mai terrebbe in ostaggio lo spegnimento (vedi
+          ``timeout_graceful_shutdown`` in :func:`main`).
+
+        Il ``finally`` decrementa in ogni caso, anche se il flusso muore male.
         """
-        return Response(status_code=204)
+        async def flusso():
+            _entra_pagina()
+            try:
+                # Primo byte subito: il browser considera la connessione
+                # stabilita solo quando arriva qualcosa.
+                yield b": collegato\n\n"
+                while True:
+                    atteso = 0.0
+                    while atteso < INTERVALLO_KEEPALIVE:
+                        if _server is not None and _server.should_exit:
+                            return
+                        if await request.is_disconnected():
+                            return
+                        await asyncio.sleep(0.25)
+                        atteso += 0.25
+                    yield b": vivo\n\n"
+            finally:
+                _esce_pagina()
+
+        return StreamingResponse(
+            flusso(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @app.post("/spegni", response_class=HTMLResponse)
     def spegni(request: Request):
@@ -160,14 +241,14 @@ def create_app() -> FastAPI:
         di aver consegnato questa pagina e l'utente resterebbe con un errore del
         browser.
 
-        ``senza_battito`` toglie il battito da *questa* pagina: continuando a
-        chiamare un server che sta morendo, mostrerebbe l'avviso "si e' chiuso da
-        solo" proprio dove c'e' scritto che l'hai chiuso tu.
+        ``senza_presenza`` toglie il flusso da *questa* pagina: aprirne uno verso
+        un server che sta morendo terrebbe in vita il contatore e mostrerebbe
+        l'avviso "si e' chiuso" proprio dove c'e' scritto che l'hai chiuso tu.
         """
         if _server is not None:
             threading.Timer(1.0, lambda: setattr(_server, "should_exit", True)).start()
         return templates.TemplateResponse(
-            request, "spento.html", {"titolo": "Chiuso", "senza_battito": True})
+            request, "spento.html", {"titolo": "Chiuso", "senza_presenza": True})
 
     return app
 
@@ -254,10 +335,16 @@ def main() -> None:
         # Apre il browser dopo un attimo, quando il server e' pronto ad accettare.
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
         print(f"Gestionale avviato su {url}")
-        _server = uvicorn.Server(
-            uvicorn.Config(app, host="127.0.0.1", port=porta, log_level="warning"))
+        _server = uvicorn.Server(uvicorn.Config(
+            app, host="127.0.0.1", port=porta, log_level="warning",
+            # SENZA QUESTO IL PROGRAMMA NON SI CHIUDE. Il default e' None: uvicorn
+            # aspetta *senza limite* che le richieste in corso finiscano, e il
+            # flusso /presenza e' fatto per non finire mai. "Chiudi il gestionale"
+            # resterebbe appeso. Il flusso molla da se' (controlla should_exit),
+            # questo e' la rete di sicurezza se un domani smettesse di farlo.
+            timeout_graceful_shutdown=3))
         # Il conto alla rovescia parte da adesso: il browser ha tutta la finestra di
-        # grazia per aprirsi e mandare il primo battito.
+        # grazia per aprirsi e collegare il primo flusso.
         segna_vita()
         threading.Thread(target=_guardiano, args=(_server,), daemon=True).start()
         _server.run()
