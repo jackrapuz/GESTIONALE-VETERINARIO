@@ -13,7 +13,7 @@
 </div>
 {% endif %}
 
-{% if fatture %}
+{% macro tabella_fatture(fatture) %}
 <table>
   <thead>
     <tr>
@@ -42,7 +42,23 @@
     {% endfor %}
   </tbody>
 </table>
+{% endmacro %}
+
+<h2 class="sez">Da incassare</h2>
+{% if da_incassare %}
+{{ tabella_fatture(da_incassare) }}
 {% else %}
+<p class="muted">Nessuna fattura da incassare.</p>
+{% endif %}
+
+<h2 class="sez">Archivio</h2>
+{% if archivio %}
+{{ tabella_fatture(archivio) }}
+{% else %}
+<p class="muted">Nessuna fattura archiviata (incassata o annullata).</p>
+{% endif %}
+
+{% if not da_incassare and not archivio %}
 <p class="muted">Nessun documento emesso. Inizia da <a href="/fatture/nuova">Nuova fattura</a>.</p>
 {% endif %}
 {% endblock %}

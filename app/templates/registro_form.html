@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block titolo %}Annota prestazione{% endblock %}
+{% block contenuto %}
+<h1>Annota prestazione</h1>
+
+{% if errori %}
+<div class="errori"><strong>Correggi gli errori:</strong>
+  <ul>{% for e in errori %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<form class="scheda" method="post" action="/registro" style="max-width:720px">
+  <div class="riga">
+    <div class="campo"><label>Data prestazione</label>
+      <input type="date" name="data_prestazione" value="{{ dati.data_prestazione or oggi }}"></div>
+    <div class="campo" style="flex:2 1 260px"><label>Cliente</label>
+      <select name="cliente_id" id="cliente_id" required>
+        <option value="">— seleziona —</option>
+        {% for c in clienti %}
+        <option value="{{ c.id }}" {{ 'selected' if dati.cliente_id == c.id|string }}>{{ c.denominazione }}</option>
+        {% endfor %}
+      </select></div>
+  </div>
+
+  <div class="riga">
+    <div class="campo"><label>Cavallo</label>
+      <select name="paziente_id" id="paziente_id" class="sel-cavallo"><option value="">—</option></select></div>
+    <div class="campo" style="flex:2 1 260px"><label>Dal listino (facoltativo)</label>
+      <select id="add-listino">
+        <option value="">— scegli una prestazione —</option>
+        {% for p in prestazioni %}
+        <option value="{{ p.id }}">{{ p.descrizione }} ({{ p.prezzo_unitario }} €)</option>
+        {% endfor %}
+      </select></div>
+  </div>
+
+  <div class="riga">
+    <div class="campo" style="flex:2 1 320px"><label>Descrizione</label>
+      <input name="descrizione" id="descrizione" value="{{ dati.descrizione or '' }}"
+             placeholder="Descrizione prestazione">
+      <input type="hidden" name="prestazione_id" id="prestazione_id" value="{{ dati.prestazione_id or '' }}"></div>
+    <div class="campo"><label>Q.tà</label>
+      <input type="number" step="0.01" name="quantita" value="{{ dati.quantita or '1' }}"></div>
+  </div>
+
+  <div class="riga">
+    <div class="campo"><label>Prezzo €</label>
+      <input type="number" step="0.01" name="prezzo_unitario" id="prezzo_unitario" value="{{ dati.prezzo_unitario or '0.00' }}"></div>
+    <div class="campo"><label>Sconto %</label>
+      <input type="number" step="0.01" name="sconto_riga_pct" value="{{ dati.sconto_riga_pct or '0' }}"></div>
+    <div class="campo"><label>IVA %</label>
+      <input type="number" step="0.01" name="aliquota_iva" id="aliquota_iva" value="{{ dati.aliquota_iva or '22' }}"></div>
+    <div class="campo"><label>Sp. TS</label>
+      <input name="tipo_spesa_ts" id="tipo_spesa_ts" value="{{ dati.tipo_spesa_ts or 'SV' }}" style="width:4.5rem"></div>
+  </div>
+
+  <div class="campo"><label>Note</label>
+    <textarea name="note" rows="2">{{ dati.note or '' }}</textarea></div>
+
+  <div class="azioni">
+    <button class="btn" type="submit">Annota</button>
+    <a class="btn secondario" href="/registro">Annulla</a>
+  </div>
+</form>
+
+<script>
+  window.DATI_REGISTRO = {
+    pazienti: {{ (pazienti or [])|tojson }},
+    prestazioni: {{ prestazioni|tojson }}
+  };
+</script>
+<script>
+(function () {
+  "use strict";
+  var D = window.DATI_REGISTRO || { pazienti: [], prestazioni: [] };
+  var selCliente = document.getElementById("cliente_id");
+  var selCavallo = document.getElementById("paziente_id");
+  var selListino = document.getElementById("add-listino");
+
+  // Cavalli del cliente selezionato; se uno solo, preselezionato.
+  function popolaCavalli() {
+    var id = selCliente.value;
+    var scelto = selCavallo.value;
+    var cavalli = (D.pazienti || []).filter(function (p) {
+      return String(p.cliente_id) === String(id);
+    });
+    selCavallo.innerHTML = '<option value="">—</option>';
+    cavalli.forEach(function (p) {
+      var o = document.createElement("option");
+      o.value = p.id; o.textContent = p.nome;
+      selCavallo.appendChild(o);
+    });
+    if (scelto && cavalli.some(function (p) { return String(p.id) === String(scelto); })) {
+      selCavallo.value = scelto;
+    } else if (cavalli.length === 1) {
+      selCavallo.value = cavalli[0].id;
+    }
+  }
+
+  // Prefill dei campi dalla prestazione di listino scelta.
+  function daListino() {
+    var p = (D.prestazioni || []).filter(function (x) {
+      return String(x.id) === String(selListino.value);
+    })[0];
+    if (!p) return;
+    document.getElementById("prestazione_id").value = p.id || "";
+    document.getElementById("descrizione").value = p.descrizione || "";
+    document.getElementById("prezzo_unitario").value = p.prezzo_unitario || "0.00";
+    document.getElementById("aliquota_iva").value = p.aliquota_iva || "22";
+    document.getElementById("tipo_spesa_ts").value = p.tipo_spesa_ts || "SV";
+    selListino.value = "";
+  }
+
+  selCliente.addEventListener("change", popolaCavalli);
+  selListino.addEventListener("change", daListino);
+  popolaCavalli();
+})();
+</script>
+{% endblock %}

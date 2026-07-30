@@ -15,7 +15,7 @@ _CAMPI = [
     "via", "cap", "citta", "provincia", "email", "telefono", "sconto_default_pct",
     "note",
 ]
-_CHECKBOX = ["opposizione_ts_default", "sostituto_imposta"]
+_CHECKBOX = ["opposizione_ts_default", "sostituto_imposta", "fatturazione_mensile"]
 
 
 def _estrai(form) -> dict:

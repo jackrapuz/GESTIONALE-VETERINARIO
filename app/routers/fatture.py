@@ -82,11 +82,35 @@ def _prestazioni_attive(conn) -> list[dict]:
     return [dict(r) for r in righe]
 
 
+def _pazienti_per_cliente(conn) -> list[dict]:
+    """Cavalli (pazienti) con il proprietario, per popolare il menu' di riga.
+
+    Il JS filtra questa lista sul cliente selezionato: cosi' ogni riga mostra
+    solo i cavalli di quel cliente (e se ne ha uno solo lo preseleziona).
+    """
+    righe = conn.execute(
+        "SELECT id, cliente_id, nome FROM pazienti ORDER BY nome"
+    ).fetchall()
+    return [{"id": r["id"], "cliente_id": r["cliente_id"], "nome": r["nome"]}
+            for r in righe]
+
+
+def _nomi_pazienti(conn) -> dict[int, str]:
+    """Mappa ``{paziente_id: nome}`` per lo snapshot del cavallo sulla riga."""
+    return {r["id"]: r["nome"]
+            for r in conn.execute("SELECT id, nome FROM pazienti").fetchall()}
+
+
 # ---------------------------------------------------------------------------
 # Parsing del form di emissione
 # ---------------------------------------------------------------------------
-def _righe_da_form(form) -> list[RigaInput]:
-    """Costruisce le RigaInput dalle liste parallele del form, scartando le righe vuote."""
+def _righe_da_form(form, nomi_pazienti: dict[int, str] | None = None) -> list[RigaInput]:
+    """Costruisce le RigaInput dalle liste parallele del form, scartando le righe vuote.
+
+    ``nomi_pazienti`` (mappa ``{id: nome}``) serve a fissare lo snapshot del nome
+    del cavallo sulla riga; se assente, lo snapshot resta vuoto.
+    """
+    nomi_pazienti = nomi_pazienti or {}
     descrizioni = form.getlist("r_descrizione")
     quantita = form.getlist("r_quantita")
     prezzi = form.getlist("r_prezzo")
@@ -94,6 +118,8 @@ def _righe_da_form(form) -> list[RigaInput]:
     aliquote = form.getlist("r_aliquota")
     tipi = form.getlist("r_tipo_spesa")
     presta = form.getlist("r_prestazione_id")
+    pazienti = form.getlist("r_paziente_id")
+    date_prest = form.getlist("r_data")
 
     righe: list[RigaInput] = []
     for i in range(len(descrizioni)):
@@ -103,6 +129,8 @@ def _righe_da_form(form) -> list[RigaInput]:
         if not desc and dec(prezzo) == 0:
             continue
         pid = presta[i] if i < len(presta) else ""
+        paz = pazienti[i] if i < len(pazienti) else ""
+        paz_id = int(paz) if str(paz).strip().isdigit() else None
         righe.append(RigaInput(
             descrizione=desc or "Prestazione",
             quantita=dec(quantita[i] if i < len(quantita) else "1") or 1,
@@ -111,6 +139,9 @@ def _righe_da_form(form) -> list[RigaInput]:
             sconto_riga_pct=dec(sconti[i] if i < len(sconti) else "0"),
             tipo_spesa_ts=(tipi[i] if i < len(tipi) else "SV") or "SV",
             prestazione_id=int(pid) if str(pid).strip().isdigit() else None,
+            paziente_id=paz_id,
+            paziente_nome=nomi_pazienti.get(paz_id, "") if paz_id else "",
+            data_prestazione=(date_prest[i] if i < len(date_prest) else "").strip(),
         ))
     return righe
 
@@ -130,9 +161,13 @@ def lista(request: Request):
         buchi = verifica_continuita(conn, anno, "fattura")
     finally:
         conn.close()
+    # Da incassare = ancora 'emessa'; Archivio = incassate o annullate (chiuse).
+    da_incassare = [f for f in fatture if f["stato"] == "emessa"]
+    archivio = [f for f in fatture if f["stato"] != "emessa"]
     return templates.TemplateResponse(
         request, "fatture_lista.html",
-        {"titolo": "Fatture", "fatture": fatture, "anno": anno, "buchi": buchi},
+        {"titolo": "Fatture", "da_incassare": da_incassare, "archivio": archivio,
+         "anno": anno, "buchi": buchi},
     )
 
 
@@ -142,6 +177,7 @@ def nuova(request: Request):
     try:
         clienti = _clienti_per_select(conn)
         prestazioni = _prestazioni_attive(conn)
+        pazienti = _pazienti_per_cliente(conn)
         studio = leggi_studio(conn)
     finally:
         conn.close()
@@ -151,8 +187,8 @@ def nuova(request: Request):
     return templates.TemplateResponse(
         request, "fattura_nuova.html",
         {"titolo": "Nuova fattura", "clienti": clienti, "prestazioni": prestazioni,
-         "studio": studio, "modalita": MODALITA_PAGAMENTO, "oggi": date.today().isoformat(),
-         "errori": [], "dati": {}},
+         "pazienti": pazienti, "studio": studio, "modalita": MODALITA_PAGAMENTO,
+         "oggi": date.today().isoformat(), "errori": [], "dati": {}},
     )
 
 
@@ -163,6 +199,7 @@ async def crea(request: Request):
     try:
         clienti = _clienti_per_select(conn)
         prestazioni = _prestazioni_attive(conn)
+        pazienti = _pazienti_per_cliente(conn)
         studio = leggi_studio(conn)
 
         errori: list[str] = []
@@ -176,7 +213,7 @@ async def crea(request: Request):
                 errori.append("Cliente non trovato.")
 
         data_emissione = str(form.get("data_emissione", "")).strip() or date.today().isoformat()
-        righe = _righe_da_form(form)
+        righe = _righe_da_form(form, _nomi_pazienti(conn))
         if not righe:
             errori.append("Inserire almeno una riga con importo.")
 
@@ -188,7 +225,7 @@ async def crea(request: Request):
             return templates.TemplateResponse(
                 request, "fattura_nuova.html",
                 {"titolo": "Nuova fattura", "clienti": clienti, "prestazioni": prestazioni,
-                 "studio": studio, "modalita": MODALITA_PAGAMENTO,
+                 "pazienti": pazienti, "studio": studio, "modalita": MODALITA_PAGAMENTO,
                  "oggi": date.today().isoformat(), "errori": errori,
                  "dati": {k: form.get(k) for k in form.keys()}},
                 status_code=400,
@@ -355,6 +392,8 @@ def nota_credito(fid: int):
                 descrizione=r["descrizione"], quantita=1,
                 prezzo_unitario=r["imponibile_riga"], aliquota_iva=r["aliquota_iva"],
                 tipo_spesa_ts=r["tipo_spesa_ts"], prestazione_id=r["prestazione_id"],
+                paziente_id=r["paziente_id"], paziente_nome=r["paziente_nome"],
+                data_prestazione=r["data_prestazione"],
             )
             for r in originale["righe"]
         ]

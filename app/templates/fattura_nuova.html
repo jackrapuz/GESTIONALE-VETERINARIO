@@ -33,13 +33,15 @@
   <table id="tab-righe" class="righe-fattura">
     <thead>
       <tr>
-        <th style="width:34%">Descrizione</th>
-        <th class="num" style="width:9%">Q.tà</th>
-        <th class="num" style="width:14%">Prezzo €</th>
-        <th class="num" style="width:10%">Sc. %</th>
-        <th class="num" style="width:9%">IVA %</th>
-        <th style="width:9%">Sp. TS</th>
-        <th class="num" style="width:13%">Imponibile</th>
+        <th style="width:11%">Data</th>
+        <th style="width:14%">Cavallo</th>
+        <th style="width:21%">Descrizione</th>
+        <th class="num" style="width:7%">Q.tà</th>
+        <th class="num" style="width:11%">Prezzo €</th>
+        <th class="num" style="width:7%">Sc. %</th>
+        <th class="num" style="width:7%">IVA %</th>
+        <th style="width:6%">Sp. TS</th>
+        <th class="num" style="width:11%">Imponibile</th>
         <th style="width:2%"></th>
       </tr>
     </thead>
@@ -128,6 +130,8 @@
 
 <template id="tpl-riga">
   <tr class="riga-fattura">
+    <td><input type="date" name="r_data"></td>
+    <td><select name="r_paziente_id" class="sel-cavallo"><option value="">—</option></select></td>
     <td><input type="hidden" name="r_prestazione_id" value=""><input name="r_descrizione" placeholder="Descrizione prestazione"></td>
     <td class="num"><input class="num" type="number" step="0.01" name="r_quantita" value="1"></td>
     <td class="num"><input class="num" type="number" step="0.01" name="r_prezzo" value="0.00"></td>
@@ -143,6 +147,7 @@
   window.DATI_FATTURA = {
     clienti: {{ clienti|tojson }},
     prestazioni: {{ prestazioni|tojson }},
+    pazienti: {{ (pazienti or [])|tojson }},
     enpavPct: {{ (studio.enpav_pct or '2')|tojson }}
   };
 </script>

@@ -11,6 +11,7 @@ avviare il server web (vedi ``tests/test_fatture.py``).
 from __future__ import annotations
 
 import sqlite3
+from typing import Callable
 
 from app.calcolo import RigaInput, RisultatoFattura, calcola_fattura
 from app.numerazione import formatta_numero, prossimo_numero
@@ -107,12 +108,18 @@ def emetti_fattura(
     formato_numerazione: str = "{n}/{anno}",
     documento_riferimento_id: int | None = None,
     proforma_origine_id: int | None = None,
+    dopo_inserimento: Callable[[sqlite3.Connection, int], None] | None = None,
 ) -> dict:
     """Emette il documento e restituisce ``{id, numero, numero_visualizzato, risultato}``.
 
     Il calcolo (ENPAV -> base IVA -> IVA -> totale, ritenuta a parte) e' delegato
     a :func:`app.calcolo.calcola_fattura`. La numerazione e' per anno di
     ``data_emissione`` e per ``tipo_documento``.
+
+    ``dopo_inserimento`` (opzionale) viene chiamato con ``(conn, fattura_id)``
+    dentro la stessa transazione, subito prima del commit: consente al chiamante
+    (es. il registro prestazioni) di legare altri record alla fattura in modo
+    atomico. Se solleva, l'intera emissione va in rollback.
     """
     risultato: RisultatoFattura = calcola_fattura(
         righe,
@@ -170,15 +177,22 @@ def emetti_fattura(
             conn.execute(
                 "INSERT INTO righe_fattura (fattura_id, prestazione_id, descrizione, "
                 "quantita, prezzo_unitario, sconto_riga_pct, aliquota_iva, "
-                "tipo_spesa_ts, imponibile_riga, ordine) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "tipo_spesa_ts, imponibile_riga, ordine, "
+                "paziente_id, paziente_nome, data_prestazione) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     fattura_id, rc.prestazione_id, rc.descrizione,
                     str(rc.quantita), str(rc.prezzo_unitario), str(rc.sconto_riga_pct),
                     str(rc.aliquota_iva), rc.tipo_spesa_ts, str(rc.imponibile_riga),
                     ordine,
+                    rc.paziente_id, rc.paziente_nome, rc.data_prestazione,
                 ),
             )
+        # Aggancio opzionale ESEGUITO NELLA STESSA TRANSAZIONE, prima del commit:
+        # serve al registro per marcare le voci come fatturate atomicamente
+        # insieme alla fattura (niente fattura con voci ancora "da fatturare").
+        if dopo_inserimento is not None:
+            dopo_inserimento(conn, fattura_id)
         conn.commit()
     except Exception:
         conn.rollback()

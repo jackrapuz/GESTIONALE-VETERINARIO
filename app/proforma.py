@@ -79,10 +79,12 @@ def emetti_proforma(
             conn.execute(
                 "INSERT INTO righe_proforma (proforma_id, prestazione_id, descrizione, "
                 "quantita, prezzo_unitario, sconto_riga_pct, aliquota_iva, tipo_spesa_ts, "
-                "imponibile_riga, ordine) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "imponibile_riga, ordine, paziente_id, paziente_nome, data_prestazione) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (pid, rc.prestazione_id, rc.descrizione, str(rc.quantita),
                  str(rc.prezzo_unitario), str(rc.sconto_riga_pct), str(rc.aliquota_iva),
-                 rc.tipo_spesa_ts, str(rc.imponibile_riga), ordine))
+                 rc.tipo_spesa_ts, str(rc.imponibile_riga), ordine,
+                 rc.paziente_id, rc.paziente_nome, rc.data_prestazione))
         conn.commit()
     except Exception:
         conn.rollback()
@@ -118,7 +120,9 @@ def converti_in_fattura(conn: sqlite3.Connection, pid: int, studio: dict) -> dic
     righe = [
         RigaInput(descrizione=r["descrizione"], quantita=1,
                   prezzo_unitario=r["imponibile_riga"], aliquota_iva=r["aliquota_iva"],
-                  tipo_spesa_ts=r["tipo_spesa_ts"], prestazione_id=r["prestazione_id"])
+                  tipo_spesa_ts=r["tipo_spesa_ts"], prestazione_id=r["prestazione_id"],
+                  paziente_id=r["paziente_id"], paziente_nome=r["paziente_nome"],
+                  data_prestazione=r["data_prestazione"])
         for r in proforma["righe"]
     ]
     esito = emetti_fattura(

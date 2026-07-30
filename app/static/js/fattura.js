@@ -7,13 +7,41 @@
  */
 (function () {
   "use strict";
-  var D = window.DATI_FATTURA || { clienti: [], prestazioni: [], enpavPct: "2" };
+  var D = window.DATI_FATTURA || { clienti: [], prestazioni: [], pazienti: [], enpavPct: "2" };
   var enpavPct = parseFloat(String(D.enpavPct).replace(",", ".")) || 0;
 
   var body = document.getElementById("righe-body");
   var tpl = document.getElementById("tpl-riga");
   var selCliente = document.getElementById("cliente_id");
   var selListino = document.getElementById("add-listino");
+
+  // Cavalli del cliente attualmente selezionato.
+  function cavalliCliente() {
+    var id = selCliente ? selCliente.value : "";
+    return (D.pazienti || []).filter(function (p) {
+      return String(p.cliente_id) === String(id);
+    });
+  }
+
+  // Riempie un menu' cavallo con i pazienti del cliente; se il cliente ne ha
+  // uno solo lo preseleziona. ``selezionato`` conserva la scelta preesistente.
+  function popolaCavalli(sel, selezionato) {
+    if (!sel) return;
+    var cavalli = cavalliCliente();
+    var scelto = selezionato != null ? selezionato : sel.value;
+    sel.innerHTML = '<option value="">—</option>';
+    cavalli.forEach(function (p) {
+      var o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = p.nome;
+      sel.appendChild(o);
+    });
+    if (scelto && cavalli.some(function (p) { return String(p.id) === String(scelto); })) {
+      sel.value = scelto;
+    } else if (cavalli.length === 1) {
+      sel.value = cavalli[0].id;   // un solo cavallo: preselezionato
+    }
+  }
 
   function num(v) {
     var n = parseFloat(String(v == null ? "" : v).replace(",", "."));
@@ -27,6 +55,7 @@
   function aggiungiRiga(preset) {
     var tr = tpl.content.firstElementChild.cloneNode(true);
     body.appendChild(tr);
+    popolaCavalli(tr.querySelector(".sel-cavallo"), null);
     if (preset) {
       tr.querySelector('[name=r_prestazione_id]').value = preset.id || "";
       tr.querySelector('[name=r_descrizione]').value = preset.descrizione || "";
@@ -106,6 +135,10 @@
       if (!sostituto) chkRit.checked = false;
       boxRit.style.opacity = sostituto ? "1" : "0.5";
     }
+    // Il cliente e' cambiato: ripopola i menu' cavallo di tutte le righe.
+    body.querySelectorAll("tr.riga-fattura .sel-cavallo").forEach(function (sel) {
+      popolaCavalli(sel, null);
+    });
     ricalcola();
   }
 

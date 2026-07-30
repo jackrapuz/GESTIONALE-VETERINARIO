@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titolo %}Registro prestazioni{% endblock %}
+{% block contenuto %}
+<div class="toolbar">
+  <h1>Registro prestazioni</h1>
+  <a class="btn" href="/registro/nuovo">+ Annota prestazione</a>
+</div>
+
+{% if gruppi %}
+<h2 class="sez">Da fatturare</h2>
+{% for g in gruppi %}
+<div class="scheda" style="max-width:960px; margin-bottom:1rem">
+  <div class="toolbar" style="margin-bottom:.6rem">
+    <h3 style="margin:0">
+      {{ g.denominazione }}
+      {% if g.fatturazione_mensile %}<span class="badge">rapporto continuativo</span>
+      {% else %}<span class="badge ok">una-tantum</span>{% endif %}
+    </h3>
+    <div class="azioni">
+      {% if g.fatturazione_mensile %}
+      <form method="post" action="/registro/{{ g.cliente_id }}/proforma">
+        <button class="btn secondario" type="submit">Proforma (riepilogo mese)</button>
+      </form>
+      <form method="post" action="/registro/{{ g.cliente_id }}/fattura"
+            onsubmit="return confirm('Emettere la fattura del mese per {{ g.denominazione }}?');">
+        <button class="btn" type="submit">Fattura il mese</button>
+      </form>
+      {% else %}
+      <form method="post" action="/registro/{{ g.cliente_id }}/fattura"
+            onsubmit="return confirm('Emettere subito la fattura per {{ g.denominazione }}?');">
+        <button class="btn" type="submit">Fattura ora</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <table class="righe-fattura">
+    <thead><tr><th style="width:14%">Data</th><th style="width:22%">Cavallo</th>
+      <th>Prestazione</th><th class="num" style="width:16%">Importo</th></tr></thead>
+    <tbody>
+      {% for v in g.voci %}
+      <tr>
+        <td>{{ v.data_prestazione|data_it }}</td>
+        <td>{{ v.paziente_nome_corrente or '—' }}</td>
+        <td>{{ v.descrizione }}</td>
+        <td class="num">{{ v.importo|euro }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="3" class="num"><strong>Totale da fatturare</strong></td>
+        <td class="num"><strong>{{ g.totale|euro }}</strong></td></tr>
+    </tfoot>
+  </table>
+</div>
+{% endfor %}
+{% else %}
+<p class="muted">Nessuna prestazione da fatturare. Inizia da
+  <a href="/registro/nuovo">Annota prestazione</a>.</p>
+{% endif %}
+{% endblock %}
