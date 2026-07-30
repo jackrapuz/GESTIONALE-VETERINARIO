@@ -188,8 +188,18 @@ def create_app() -> FastAPI:
 
     @app.get("/salute", response_class=PlainTextResponse)
     def salute():
-        """Serve a un secondo avvio per riconoscere che il gestionale gira gia'."""
-        return "gestionale-veterinario"
+        """Carta d'identita' dell'istanza, per chi prova ad avviarne una seconda.
+
+        Tre righe: il nome del programma, **quale cartella dati sta servendo** e
+        quante pagine ha aperte.
+
+        La cartella e' la parte importante. Prima c'era solo il nome, e un secondo
+        avvio si accontentava di quello: con un server di sviluppo acceso sulla
+        radice del progetto e l'exe sui propri dati, il doppio clic ti portava
+        sull'archivio sbagliato senza dire niente. Per un gestionale di fatture
+        e' il difetto peggiore possibile.
+        """
+        return f"gestionale-veterinario\n{DATI_DIR}\n{pagine_aperte()}"
 
     @app.get("/presenza")
     async def presenza(request: Request):
@@ -248,7 +258,14 @@ def create_app() -> FastAPI:
         if _server is not None:
             threading.Timer(1.0, lambda: setattr(_server, "should_exit", True)).start()
         return templates.TemplateResponse(
-            request, "spento.html", {"titolo": "Chiuso", "senza_presenza": True})
+            request, "spento.html",
+            {"titolo": "Chiuso", "senza_presenza": True,
+             # Avviato dalla CLI di uvicorn (sviluppo): non abbiamo l'oggetto
+             # server, quindi non possiamo fermarlo. Prima la pagina diceva
+             # "chiuso" comunque, e il server restava vivo: e' cosi' che e' nato
+             # un orfano rimasto in piedi per tre giorni sulla porta 8420,
+             # invisibile e con codice vecchio. Meglio dire la verita'.
+             "davvero_chiuso": _server is not None})
 
     return app
 
@@ -271,28 +288,109 @@ def _porta_libera(preferite: tuple[int, ...] = (8420, 8421, 8422)) -> int:
         return s.getsockname()[1]
 
 
-def _gia_in_esecuzione(preferite: tuple[int, ...] = (8420, 8421, 8422)) -> str | None:
-    """URL di un'istanza gia' avviata, se ce n'e' una.
+def _stessa_installazione(corpo: str) -> bool:
+    """Vero se la risposta di ``/salute`` viene da un'istanza sui **nostri** dati.
+
+    Non basta che risponda "gestionale": un server di sviluppo avviato sulla
+    radice del progetto risponde uguale ma serve un altro database. Deve
+    combaciare la cartella dati (confronto senza distinzione di maiuscole, come
+    fa Windows con i percorsi).
+    """
+    righe = corpo.splitlines()
+    if not righe or not righe[0].startswith("gestionale"):
+        return False
+    if len(righe) < 2:
+        return False  # versione vecchia, che non diceva quale archivio serviva
+    try:
+        loro = Path(righe[1].strip()).resolve()
+    except OSError:
+        return False
+    return str(loro).casefold() == str(DATI_DIR.resolve()).casefold()
+
+
+def _pagine_da_salute(corpo: str) -> int:
+    """Quante pagine ha aperte l'istanza che ha risposto (0 se non lo dice)."""
+    righe = corpo.splitlines()
+    if len(righe) < 3:
+        return 0
+    try:
+        return int(righe[2].strip())
+    except ValueError:
+        return 0
+
+
+def _gia_in_esecuzione(preferite: tuple[int, ...] = (8420, 8421, 8422)) -> tuple[str, int] | None:
+    """``(url, pagine_aperte)`` di un'istanza gia' avviata **sui nostri dati**.
 
     Senza finestra del terminale non si vede che il gestionale e' gia' aperto: un
-    secondo doppio clic ne avvierebbe un'altra copia sugli stessi dati. Qui si
-    controlla se una delle porte risponde *ed e' questo programma*, cosi' il
-    secondo avvio si limita a riportare in primo piano quello gia' in funzione.
+    secondo doppio clic ne avvierebbe un'altra copia sugli stessi dati. Le porte
+    occupate da qualcos'altro — o da un'istanza su un altro archivio — vengono
+    saltate.
     """
+    import urllib.request
+
     for porta in preferite:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.4)
             if s.connect_ex(("127.0.0.1", porta)) != 0:
                 continue
         try:
-            import urllib.request
             with urllib.request.urlopen(
                     f"http://127.0.0.1:{porta}/salute", timeout=1.5) as r:
-                if r.status == 200 and r.read(32).startswith(b"gestionale"):
-                    return f"http://127.0.0.1:{porta}"
+                if r.status != 200:
+                    continue
+                corpo = r.read(1024).decode("utf-8", "replace")
         except Exception:
             continue  # la porta e' occupata da altro: si prova la successiva
+        if _stessa_installazione(corpo):
+            return f"http://127.0.0.1:{porta}", _pagine_da_salute(corpo)
     return None
+
+
+# Il titolo di ogni pagina finisce con questo (vedi templates/base.html), quindi
+# la finestra del browser che la mostra lo contiene.
+TITOLO_FINESTRA = "Gestionale Veterinario"
+
+
+def _porta_in_primo_piano(pezzo_titolo: str = TITOLO_FINESTRA) -> bool:
+    """Porta davanti la finestra del browser che sta mostrando il gestionale.
+
+    Serve al secondo doppio clic: aprire un'altra scheda sulla stessa pagina e'
+    fastidioso, la cosa giusta e' mostrare quella che c'e' gia'. Solo Win32 via
+    ``ctypes`` (nessuna dipendenza), e best effort: se la finestra non si trova
+    (per esempio la scheda del gestionale non e' quella attiva, e quindi il
+    titolo non compare) si ritorna ``False`` e il chiamante apre il browser.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        trovate: list[int] = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def esamina(hwnd, _):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            lunghezza = user32.GetWindowTextLengthW(hwnd)
+            if lunghezza:
+                buf = ctypes.create_unicode_buffer(lunghezza + 1)
+                user32.GetWindowTextW(hwnd, buf, lunghezza + 1)
+                if pezzo_titolo in buf.value:
+                    trovate.append(hwnd)
+                    return False  # la prima basta
+            return True
+
+        user32.EnumWindows(esamina, 0)
+        if not trovate:
+            return False
+        hwnd = trovate[0]
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE: se era ridotta a icona
+        return bool(user32.SetForegroundWindow(hwnd))
+    except Exception:
+        return False
 
 
 def _dirotta_output() -> Path | None:
@@ -327,7 +425,15 @@ def main() -> None:
     try:
         gia = _gia_in_esecuzione()
         if gia:
-            webbrowser.open(gia)
+            url, pagine = gia
+            # Se una pagina e' gia' aperta, la cosa giusta e' mostrarla, non
+            # aprirne un'altra sulla stessa cosa. Se non c'e' nessuna pagina
+            # (istanza accesa ma browser chiuso) o se la finestra non si trova,
+            # allora si apre il browser.
+            if pagine > 0 and _porta_in_primo_piano():
+                print(f"Gestionale gia' aperto su {url}: riportata avanti la finestra.")
+                return
+            webbrowser.open(url)
             return
 
         porta = _porta_libera()

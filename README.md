@@ -70,6 +70,37 @@ Nessun timer nella pagina, quindi la limitazione delle schede nascoste non conta
 La pagina di commiato (`spento.html`) riceve `senza_presenza`: non deve aprire un
 flusso verso un server che sta morendo.
 
+### Un secondo doppio clic non apre una seconda scheda
+`/salute` è la carta d'identità dell'istanza e risponde con **tre righe**: nome del
+programma, **cartella dati servita**, numero di pagine aperte. All'avvio,
+`_gia_in_esecuzione()` interroga le porte 8420-8422 e riusa un'istanza **solo se la
+cartella dati combacia** (`_stessa_installazione()`).
+
+Perché è importante: prima bastava che rispondesse "gestionale". Con un server di
+sviluppo acceso sulla radice del progetto e l'exe sui propri dati, il doppio clic
+portava **sull'archivio sbagliato**, in silenzio. Per un gestionale di fatture è il
+difetto peggiore possibile. Un'istanza che non dichiara la cartella (versione
+vecchia) non viene riusata: meglio avviarne una propria che indovinare.
+
+Se l'istanza trovata ha **già una pagina aperta**, il secondo avvio non apre una
+scheda nuova: porta davanti la finestra del browser che la sta mostrando
+(`_porta_in_primo_piano()`, Win32 via `ctypes`, nessuna dipendenza). Cerca una
+finestra visibile il cui titolo contenga `Gestionale Veterinario` — è il suffisso
+del `<title>` di ogni pagina. È **best effort**: se la scheda del gestionale non è
+quella attiva nella sua finestra, il titolo non compare e si ricade sull'apertura
+del browser.
+
+### Se il pulsante non può chiudere, lo dice
+`/spegni` ferma il server tramite l'oggetto `uvicorn.Server` che `main()` mette in
+`_server`. Avviando dalla **CLI di uvicorn** (`python -m uvicorn app.main:app`)
+quell'oggetto non esiste: prima la pagina diceva "Gestionale chiuso" comunque e il
+server restava vivo. È così che è nato un **orfano rimasto in piedi tre giorni**
+sulla porta 8420, invisibile e con codice vecchio, che occupava la porta preferita
+dell'exe. Ora la pagina dice che non ha potuto chiuderlo e rimanda a Ctrl+C.
+
+In sviluppo si ferma con **Ctrl+C**, oppure si avvia con `python -m app.main`
+(che passa da `main()`, quindi il pulsante funziona).
+
 La prima volta viene creata accanto all'exe la cartella **`dati`** con il database.
 Se l'avvio fallisce non c'è una console dove leggere l'errore: compare una
 **finestrella di Windows** e il dettaglio finisce in `dati/avvio.log`.
@@ -242,10 +273,23 @@ il file è in uso. Due cause, in ordine di frequenza:
 1. **Il gestionale è in esecuzione.** Non serve il Gestione attività: chiudilo dal
    pulsante *"Chiudi il gestionale"*, oppure con `POST /spegni` sulla porta su cui
    ascolta (`Get-NetTCPConnection -State Listen -OwningProcess <pid>` per trovarla).
-2. **È appena stato chiuso.** Il bootloader onefile di PyInstaller resta ancora
-   **15-30 secondi** a ripulire la propria cartella temporanea, e in quel tempo il
-   file è bloccato. Non è un processo orfano: esce da solo. Aspetta mezzo minuto e
-   ribuilda.
+2. **È appena stato chiuso**, ma il **bootloader onefile** di PyInstaller è ancora
+   lì a ripulire la propria cartella temporanea, e in quel tempo il file resta
+   bloccato. Di solito esce in mezzo minuto, ma è stato visto restare **oltre
+   quattro minuti**. Riconoscerlo è facile e permette di chiuderlo senza dubbi:
+
+   ```powershell
+   Get-Process -Name Gestionale | ForEach-Object {
+     $py = $_.Modules | Where-Object { $_.ModuleName -like "python*.dll" }
+     $porte = (Get-NetTCPConnection -State Listen -OwningProcess $_.Id -ErrorAction SilentlyContinue).LocalPort
+     "PID $($_.Id) | python: $(if($py){'SI'}else{'no'}) | porte: $porte"
+   }
+   ```
+
+   **Nessun `python*.dll` caricato e nessuna porta in ascolto** = l'applicazione è
+   già uscita e quello è solo il bootloader: `Stop-Process -Name Gestionale -Force`
+   è sicuro, non c'è niente da salvare. Se invece ha Python caricato e una porta,
+   è il gestionale vero e va chiuso con `/spegni`.
 
 ## 11. Note fiscali
 
