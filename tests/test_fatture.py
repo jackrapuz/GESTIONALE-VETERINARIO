@@ -87,6 +87,44 @@ def test_rollback_non_brucia_il_numero(conn):
     assert row is None or int(row["ultimo_numero"]) == 0
 
 
+def test_riga_con_cavallo_e_data_persiste_e_raggruppa(conn):
+    """Cavallo + data finiscono su righe_fattura e il PDF raggruppa per cavallo."""
+    from app.calcolo import RigaInput
+    from app.fatturazione import gruppi_iva_da_righe, leggi_fattura
+    from app.pdf_fattura import _raggruppa_per_cavallo, genera_pdf_fattura
+
+    conn.execute("INSERT INTO pazienti (cliente_id, nome) VALUES (1,'GUUS')")
+    conn.execute("INSERT INTO pazienti (cliente_id, nome) VALUES (1,'FULLY LOADED')")
+    conn.commit()
+    esito = emetti_fattura(
+        conn, cliente=_cliente(conn),
+        righe=[
+            RigaInput("Visita + anestesia", 1, "190", "22",
+                      paziente_id=1, paziente_nome="GUUS", data_prestazione="2026-05-26"),
+            RigaInput("Controllo montato", 1, "120", "22",
+                      paziente_id=1, paziente_nome="GUUS", data_prestazione="2026-06-16"),
+            RigaInput("Esame del sangue", 1, "100", "22",
+                      paziente_id=2, paziente_nome="FULLY LOADED", data_prestazione="2026-07-02"),
+        ],
+        data_emissione="2026-07-30",
+    )
+    f = leggi_fattura(conn, esito["id"])
+    # snapshot cavallo + data sulle righe
+    assert [r["paziente_nome"] for r in f["righe"]] == ["GUUS", "GUUS", "FULLY LOADED"]
+    assert f["righe"][0]["data_prestazione"] == "2026-05-26"
+    # totali invariati rispetto al calcolo standard (410 imponibile)
+    assert str(esito["risultato"].imponibile) == "410.00"
+    assert str(esito["risultato"].totale_documento) == "510.20"
+    # raggruppamento: due gruppi, GUUS prima
+    gruppi = _raggruppa_per_cavallo(f["righe"])
+    assert [nome for nome, _ in gruppi] == ["GUUS", "FULLY LOADED"]
+    assert len(gruppi[0][1]) == 2
+    # il PDF si genera senza errori
+    studio = {"denominazione": "Studio Test", "enpav_pct": "2"}
+    pdf = genera_pdf_fattura(f, studio, gruppi_iva_da_righe(f["righe"], f["enpav_pct"]))
+    assert pdf[:4] == b"%PDF"
+
+
 def test_nota_credito_ha_sequenza_separata(conn):
     f = emetti_fattura(
         conn, cliente=_cliente(conn),

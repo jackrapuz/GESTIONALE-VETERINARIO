@@ -143,31 +143,78 @@ def _blocco_cliente(f: dict, ss) -> Table:
     return t
 
 
+def _raggruppa_per_cavallo(righe: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Righe raggruppate per nome del cavallo, in ordine di prima comparsa.
+
+    Le righe senza cavallo confluiscono in un gruppo con chiave vuota (nessuna
+    intestazione stampata). Rispecchia la fattura cartacea, che elenca le
+    prestazioni sotto il nome di ogni cavallo.
+    """
+    gruppi: dict[str, list[dict]] = {}
+    ordine: list[str] = []
+    for r in righe:
+        nome = (r.get("paziente_nome") or "").strip()
+        if nome not in gruppi:
+            gruppi[nome] = []
+            ordine.append(nome)
+        gruppi[nome].append(r)
+    return [(nome, gruppi[nome]) for nome in ordine]
+
+
 def _tabella_righe(f: dict, ss) -> Table:
-    intest = ["Descrizione", "Q.tà", "Prezzo", "Sc.%", "IVA%", "Imponibile"]
+    """Tabella righe VERSO IL CLIENTE: Data, Descrizione, Q.tà, Importo.
+
+    Prezzo di listino e sconto NON compaiono qui: sono informazioni dell'emittente
+    e restano nell'app. L'importo e' il praticato (``imponibile_riga``). Le righe
+    sono raggruppate per cavallo, con una riga-intestazione per gruppo e la data
+    all'inizio di ogni prestazione.
+
+    L'aliquota compare **solo se il documento ne ha piu' d'una**. Con un'aliquota
+    sola la dice gia' il riepilogo qui sotto e ripeterla a ogni riga e' rumore; con
+    piu' aliquote, invece, senza quella colonna il cliente non puo' sapere quale
+    importo sta a quale aliquota, e il documento non e' riconciliabile.
+    """
+    aliquote = {str(r.get("aliquota_iva")) for r in f["righe"]}
+    mostra_iva = len(aliquote) > 1
+
+    intest = ["Data", "Descrizione", "Q.tà"] + (["IVA%"] if mostra_iva else []) + ["Importo"]
+    n_col = len(intest)
     dati = [intest]
-    for r in f["righe"]:
-        dati.append([
-            Paragraph(r["descrizione"], ss["Corpo"]),
-            euro(r["quantita"]) if "." in str(r["quantita"]) else str(r["quantita"]),
-            euro(r["prezzo_unitario"]),
-            str(r["sconto_riga_pct"]).rstrip("0").rstrip(".") if "." in str(r["sconto_riga_pct"]) else str(r["sconto_riga_pct"]),
-            str(r["aliquota_iva"]).rstrip("0").rstrip(".") if "." in str(r["aliquota_iva"]) else str(r["aliquota_iva"]),
-            euro(r["imponibile_riga"]),
-        ])
-    t = Table(dati, colWidths=[80 * mm, 15 * mm, 25 * mm, 14 * mm, 14 * mm, 22 * mm], repeatRows=1)
-    t.setStyle(TableStyle([
+    stile = [
         ("BACKGROUND", (0, 0), (-1, 0), _TINTA),
         ("TEXTCOLOR", (0, 0), (-1, 0), _VERDE),
         ("FONTSIZE", (0, 0), (-1, 0), 8),
         ("FONTSIZE", (0, 1), (-1, -1), 9),
-        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),   # Q.tà e Importo a destra
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LINEBELOW", (0, 0), (-1, 0), 0.6, _BORDO),
-        ("LINEBELOW", (0, 1), (-1, -1), 0.3, _BORDO),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    ]
+    r_idx = 0  # indice della prossima riga da inserire in ``dati``
+    for nome_cavallo, righe in _raggruppa_per_cavallo(f["righe"]):
+        if nome_cavallo:
+            dati.append([Paragraph(f"<b>{nome_cavallo}</b>", ss["Corpo"])] + [""] * (n_col - 1))
+            r_idx += 1
+            stile.append(("SPAN", (0, r_idx), (-1, r_idx)))
+            stile.append(("BACKGROUND", (0, r_idx), (-1, r_idx), _TINTA))
+            stile.append(("TEXTCOLOR", (0, r_idx), (-1, r_idx), _VERDE))
+        for r in righe:
+            riga = [
+                data_it(r.get("data_prestazione")),
+                Paragraph(r["descrizione"], ss["Corpo"]),
+                euro(r["quantita"]) if "." in str(r["quantita"]) else str(r["quantita"]),
+            ]
+            if mostra_iva:
+                riga.append(_pulisci(r["aliquota_iva"]))
+            riga.append(euro(r["imponibile_riga"]))
+            dati.append(riga)
+            r_idx += 1
+            stile.append(("LINEBELOW", (0, r_idx), (-1, r_idx), 0.3, _BORDO))
+    larghezze = ([26 * mm, 104 * mm, 18 * mm, 22 * mm] if not mostra_iva
+                 else [26 * mm, 90 * mm, 18 * mm, 14 * mm, 22 * mm])
+    t = Table(dati, colWidths=larghezze, repeatRows=1)
+    t.setStyle(TableStyle(stile))
     return t
 
 

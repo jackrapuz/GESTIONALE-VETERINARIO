@@ -42,6 +42,9 @@
     <div class="campo check"><input type="checkbox" id="opp" name="opposizione_ts_default" {{ 'checked' if cliente.opposizione_ts_default }}><label for="opp">Opposizione TS di default</label></div>
   </div>
   <div class="riga">
+    <div class="campo check" style="flex:1 1 100%"><input type="checkbox" id="mensile" name="fatturazione_mensile" {{ 'checked' if cliente.fatturazione_mensile }}><label for="mensile">Fatturazione mensile (rapporto continuativo: si accumula nel registro e si fattura a fine mese)</label></div>
+  </div>
+  <div class="riga">
     <div class="campo" style="flex:1 1 100%"><label>Note</label><textarea name="note" rows="2">{{ cliente.note|default('') }}</textarea></div>
   </div>
 

@@ -22,7 +22,8 @@ from app.proforma import (
     converti_in_fattura, elimina_proforma, emetti_proforma, leggi_proforma,
 )
 from app.routers.fatture import (
-    MODALITA_PAGAMENTO, _clienti_per_select, _contatti, _prestazioni_attive, _righe_da_form,
+    MODALITA_PAGAMENTO, _clienti_per_select, _contatti, _nomi_pazienti,
+    _pazienti_per_cliente, _prestazioni_attive, _righe_da_form,
 )
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
@@ -49,6 +50,7 @@ def nuovo(request: Request):
     try:
         clienti = _clienti_per_select(conn)
         prestazioni = _prestazioni_attive(conn)
+        pazienti = _pazienti_per_cliente(conn)
         studio = leggi_studio(conn)
     finally:
         conn.close()
@@ -57,8 +59,9 @@ def nuovo(request: Request):
     return templates.TemplateResponse(
         request, "fattura_nuova.html",
         {"titolo": "Nuovo preventivo", "doc": "preventivo", "clienti": clienti,
-         "prestazioni": prestazioni, "studio": studio, "modalita": MODALITA_PAGAMENTO,
-         "oggi": date.today().isoformat(), "errori": [], "dati": {}})
+         "prestazioni": prestazioni, "pazienti": pazienti, "studio": studio,
+         "modalita": MODALITA_PAGAMENTO, "oggi": date.today().isoformat(),
+         "errori": [], "dati": {}})
 
 
 @router.post("/preventivi")
@@ -68,6 +71,7 @@ async def crea(request: Request):
     try:
         clienti = _clienti_per_select(conn)
         prestazioni = _prestazioni_attive(conn)
+        pazienti = _pazienti_per_cliente(conn)
         studio = leggi_studio(conn)
 
         errori: list[str] = []
@@ -80,7 +84,7 @@ async def crea(request: Request):
             if cliente is None:
                 errori.append("Cliente non trovato.")
         data_emissione = str(form.get("data_emissione", "")).strip() or date.today().isoformat()
-        righe = _righe_da_form(form)
+        righe = _righe_da_form(form, _nomi_pazienti(conn))
         if not righe:
             errori.append("Inserire almeno una riga con importo.")
 
@@ -88,9 +92,9 @@ async def crea(request: Request):
             return templates.TemplateResponse(
                 request, "fattura_nuova.html",
                 {"titolo": "Nuovo preventivo", "doc": "preventivo", "clienti": clienti,
-                 "prestazioni": prestazioni, "studio": studio, "modalita": MODALITA_PAGAMENTO,
-                 "oggi": date.today().isoformat(), "errori": errori,
-                 "dati": {k: form.get(k) for k in form.keys()}},
+                 "prestazioni": prestazioni, "pazienti": pazienti, "studio": studio,
+                 "modalita": MODALITA_PAGAMENTO, "oggi": date.today().isoformat(),
+                 "errori": errori, "dati": {k: form.get(k) for k in form.keys()}},
                 status_code=400)
 
         validita = str(form.get("validita_giorni", "30")).strip()

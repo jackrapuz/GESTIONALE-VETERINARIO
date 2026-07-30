@@ -48,6 +48,11 @@ class RigaInput:
     sconto_riga_pct: Decimal = Decimal("0")
     tipo_spesa_ts: str = "SV"
     prestazione_id: int | None = None
+    # Cavallo e data della prestazione: opzionali, attraversano il calcolo
+    # invariati per finire sulla riga del documento (vedi RigaCalcolata).
+    paziente_id: int | None = None
+    paziente_nome: str = ""
+    data_prestazione: str = ""
 
 
 @dataclass
@@ -60,6 +65,9 @@ class RigaCalcolata:
     tipo_spesa_ts: str
     prestazione_id: int | None
     imponibile_riga: Decimal
+    paziente_id: int | None = None
+    paziente_nome: str = ""
+    data_prestazione: str = ""
 
 
 @dataclass
@@ -124,6 +132,9 @@ def calcola_fattura(
                 tipo_spesa_ts=r.tipo_spesa_ts,
                 prestazione_id=r.prestazione_id,
                 imponibile_riga=imp_riga,
+                paziente_id=r.paziente_id,
+                paziente_nome=r.paziente_nome,
+                data_prestazione=r.data_prestazione,
             )
         )
 

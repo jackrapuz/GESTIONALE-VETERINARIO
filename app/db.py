@@ -259,10 +259,63 @@ def _m002_proforma_e_invio(conn: sqlite3.Connection) -> None:
     )
 
 
+def _m003_registro_e_cavalli(conn: sqlite3.Connection) -> None:
+    """v3: registro delle prestazioni eseguite + cavallo/data sulle righe.
+
+    - ``prestazioni_eseguite``: il diario di lavoro. Una riga = data + cliente +
+      cavallo + prestazione + prezzo, annotata quando la prestazione viene fatta.
+      Finche' ``fattura_id``/``proforma_id`` restano NULL la voce e' "da
+      fatturare"; l'insieme delle voci non fatturate di un cliente e' la sua
+      "bozza" implicita. E' una tabella a se': NON tocca ``fatture``, cosi'
+      cruscotto, export e numerazione restano invariati.
+    - ``clienti.fatturazione_mensile``: caratteristica stabile del cliente
+      (rapporto continuativo / piu' cavalli), non una scelta per documento.
+    - ``paziente_id`` + ``paziente_nome`` (snapshot) + ``data_prestazione`` sulle
+      righe di fattura e proforma: il PDF puo' raggruppare per cavallo con la data
+      della singola prestazione, come la fattura cartacea gia' in uso.
+
+    ``paziente_nome`` e' uno snapshot come i dati cliente su ``fatture``: se il
+    cavallo viene rinominato o cancellato, il documento emesso non cambia.
+    """
+    conn.executescript(
+        """
+        CREATE TABLE prestazioni_eseguite (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_prestazione TEXT NOT NULL,
+            cliente_id  INTEGER NOT NULL REFERENCES clienti(id),
+            paziente_id INTEGER REFERENCES pazienti(id),
+            prestazione_id INTEGER REFERENCES prestazioni(id),
+            descrizione TEXT NOT NULL DEFAULT '',
+            quantita TEXT NOT NULL DEFAULT '1',
+            prezzo_unitario TEXT NOT NULL DEFAULT '0.00',
+            sconto_riga_pct TEXT NOT NULL DEFAULT '0.00',
+            aliquota_iva TEXT NOT NULL DEFAULT '22.00',
+            tipo_spesa_ts TEXT NOT NULL DEFAULT 'SV',
+            note TEXT NOT NULL DEFAULT '',
+            fattura_id  INTEGER REFERENCES fatture(id),
+            proforma_id INTEGER REFERENCES proforme(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+        CREATE INDEX idx_registro_da_fatturare
+            ON prestazioni_eseguite(cliente_id, fattura_id);
+
+        ALTER TABLE clienti ADD COLUMN fatturazione_mensile INTEGER NOT NULL DEFAULT 0;
+
+        ALTER TABLE righe_fattura  ADD COLUMN paziente_id INTEGER REFERENCES pazienti(id);
+        ALTER TABLE righe_fattura  ADD COLUMN paziente_nome TEXT NOT NULL DEFAULT '';
+        ALTER TABLE righe_fattura  ADD COLUMN data_prestazione TEXT NOT NULL DEFAULT '';
+        ALTER TABLE righe_proforma ADD COLUMN paziente_id INTEGER REFERENCES pazienti(id);
+        ALTER TABLE righe_proforma ADD COLUMN paziente_nome TEXT NOT NULL DEFAULT '';
+        ALTER TABLE righe_proforma ADD COLUMN data_prestazione TEXT NOT NULL DEFAULT '';
+        """
+    )
+
+
 # Lista ordinata delle migrazioni. L'indice+1 e' la versione risultante.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _m001_schema_iniziale,
     _m002_proforma_e_invio,
+    _m003_registro_e_cavalli,
 ]
 
 
