@@ -85,6 +85,20 @@ body {
   padding: 2.5rem 0 1.5rem;
 }
 .footer svg { width: 13px; height: 13px; vertical-align: -2px; opacity: .6; margin-right: .3rem; }
+/* Chiusura del gestionale. Senza finestra del terminale e' l'unico modo di
+   fermarlo, quindi deve saltare all'occhio: un pulsante vero, non un link. */
+.footer .spegni { margin-top: 1.1rem; }
+.footer .chiudi {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .6rem 1.2rem; cursor: pointer;
+  font-family: var(--sans); font-size: .92rem; font-weight: 600;
+  color: var(--verde); background: var(--superficie);
+  border: 1.5px solid var(--verde); border-radius: 999px;
+  box-shadow: var(--ombra-s); transition: background .15s, color .15s;
+}
+.footer .chiudi svg { width: 15px; height: 15px; opacity: 1; margin: 0; }
+.footer .chiudi:hover { background: var(--verde); color: #fff; }
+.footer .chiudi:focus-visible { outline: 3px solid var(--ottone); outline-offset: 2px; }
 
 /* ---- Tipografia --------------------------------------------------------- */
 h1 { font-family: var(--serif); font-weight: 600; font-size: 1.9rem; letter-spacing: .2px; margin: 0 0 .2rem; }

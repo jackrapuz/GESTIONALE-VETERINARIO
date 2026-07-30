@@ -7,6 +7,7 @@ sia come exe PyInstaller.
 from __future__ import annotations
 
 import socket
+import sys
 import threading
 import webbrowser
 from datetime import date
@@ -15,7 +16,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.db import DATI_DIR, get_conn, init_db
@@ -94,10 +95,30 @@ def create_app() -> FastAPI:
         ctx.update(_statistiche_dashboard())
         return templates.TemplateResponse(request, "home.html", ctx)
 
+    @app.get("/salute", response_class=PlainTextResponse)
+    def salute():
+        """Serve a un secondo avvio per riconoscere che il gestionale gira gia'."""
+        return "gestionale-veterinario"
+
+    @app.post("/spegni", response_class=HTMLResponse)
+    def spegni(request: Request):
+        """Ferma il gestionale.
+
+        Senza finestra del terminale non c'e' altro modo di chiuderlo. L'arresto
+        e' rimandato di un istante, altrimenti il server morirebbe prima di aver
+        consegnato questa pagina e l'utente resterebbe con un errore del browser.
+        """
+        if _server is not None:
+            threading.Timer(1.0, lambda: setattr(_server, "should_exit", True)).start()
+        return templates.TemplateResponse(request, "spento.html", {"titolo": "Chiuso"})
+
     return app
 
 
 app = create_app()
+
+# Riferimento al server in esecuzione: serve a /spegni per fermarlo.
+_server: uvicorn.Server | None = None
 
 
 def _porta_libera(preferite: tuple[int, ...] = (8420, 8421, 8422)) -> int:
@@ -112,13 +133,78 @@ def _porta_libera(preferite: tuple[int, ...] = (8420, 8421, 8422)) -> int:
         return s.getsockname()[1]
 
 
+def _gia_in_esecuzione(preferite: tuple[int, ...] = (8420, 8421, 8422)) -> str | None:
+    """URL di un'istanza gia' avviata, se ce n'e' una.
+
+    Senza finestra del terminale non si vede che il gestionale e' gia' aperto: un
+    secondo doppio clic ne avvierebbe un'altra copia sugli stessi dati. Qui si
+    controlla se una delle porte risponde *ed e' questo programma*, cosi' il
+    secondo avvio si limita a riportare in primo piano quello gia' in funzione.
+    """
+    for porta in preferite:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.4)
+            if s.connect_ex(("127.0.0.1", porta)) != 0:
+                continue
+        try:
+            import urllib.request
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{porta}/salute", timeout=1.5) as r:
+                if r.status == 200 and r.read(32).startswith(b"gestionale"):
+                    return f"http://127.0.0.1:{porta}"
+        except Exception:
+            continue  # la porta e' occupata da altro: si prova la successiva
+    return None
+
+
+def _dirotta_output() -> Path | None:
+    """Manda stdout/stderr su file quando non c'e' una console.
+
+    Nell'exe senza finestra ``sys.stdout``/``sys.stderr`` sono ``None``: la prima
+    riga di log di uvicorn farebbe saltare l'avvio, e per giunta in silenzio. Il
+    file resta accanto ai dati, cosi' se qualcosa non parte c'e' dove guardare.
+    """
+    if sys.stdout is not None and sys.stderr is not None:
+        return None
+    DATI_DIR.mkdir(parents=True, exist_ok=True)
+    percorso = DATI_DIR / "avvio.log"
+    f = open(percorso, "a", encoding="utf-8", buffering=1)
+    sys.stdout = f
+    sys.stderr = f
+    return percorso
+
+
+def _avviso(titolo: str, messaggio: str) -> None:
+    """Finestrella di sistema: senza console e' l'unico modo di farsi sentire."""
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, messaggio, titolo, 0x10)
+    except Exception:
+        pass
+
+
 def main() -> None:
-    porta = _porta_libera()
-    url = f"http://127.0.0.1:{porta}"
-    # Apre il browser dopo un attimo, quando il server e' pronto ad accettare.
-    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-    print(f"Gestionale avviato su {url}  (chiudi questa finestra per uscire)")
-    uvicorn.run(app, host="127.0.0.1", port=porta, log_level="warning")
+    global _server
+    log = _dirotta_output()
+    try:
+        gia = _gia_in_esecuzione()
+        if gia:
+            webbrowser.open(gia)
+            return
+
+        porta = _porta_libera()
+        url = f"http://127.0.0.1:{porta}"
+        # Apre il browser dopo un attimo, quando il server e' pronto ad accettare.
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        print(f"Gestionale avviato su {url}")
+        _server = uvicorn.Server(
+            uvicorn.Config(app, host="127.0.0.1", port=porta, log_level="warning"))
+        _server.run()
+    except Exception as e:
+        dove = f"\n\nDettagli in:\n{log}" if log else ""
+        _avviso("Gestionale — avvio non riuscito",
+                f"Il gestionale non e' riuscito ad avviarsi.\n\n{type(e).__name__}: {e}{dove}")
+        raise
 
 
 if __name__ == "__main__":

@@ -213,17 +213,22 @@ def genera_proforma(
     if not voci:
         raise ValueError("Nessuna prestazione da fatturare per questo cliente.")
 
-    esito = emetti_proforma(
+    voci_ids = [v["id"] for v in voci]
+
+    def collega(conn: sqlite3.Connection, proforma_id: int) -> None:
+        conn.executemany(
+            "UPDATE prestazioni_eseguite SET proforma_id=? WHERE id=?",
+            [(proforma_id, i) for i in voci_ids],
+        )
+
+    return emetti_proforma(
         conn,
         cliente=dict(cliente),
         righe=_righe_da_voci(voci),
         data_emissione=date.today().isoformat(),
         sconto_cliente_pct=cliente["sconto_default_pct"] or "0",
         enpav_pct=studio.get("enpav_pct") or "2",
+        # Dentro la transazione, come per la fattura: una proforma non puo'
+        # restare scollegata dalle voci che la compongono.
+        dopo_inserimento=collega,
     )
-    with conn:
-        conn.executemany(
-            "UPDATE prestazioni_eseguite SET proforma_id=? WHERE id=?",
-            [(esito["id"], v["id"]) for v in voci],
-        )
-    return esito

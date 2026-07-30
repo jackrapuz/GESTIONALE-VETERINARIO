@@ -184,3 +184,37 @@ def test_la_proforma_dal_registro_applica_lo_stesso_sconto(conn):
            quantita="1", prezzo_unitario="100.00", aliquota_iva="22.00")
     esito = genera_proforma(conn, 2, {"enpav_pct": "2"})
     assert str(esito["risultato"].imponibile) == "90.00"
+
+
+def test_la_proforma_non_puo_restare_scollegata_dalle_voci(conn):
+    """Se il collegamento delle voci fallisce, non deve restare una proforma orfana.
+
+    Il collegamento gira dentro la stessa transazione dell'emissione: un errore li'
+    annulla tutto, proforma compresa.
+    """
+    import app.registro as reg
+
+    annota(conn, data_prestazione="2026-07-30", cliente_id=2, descrizione="Visita",
+           quantita="1", prezzo_unitario="100.00", aliquota_iva="22.00")
+    prima = conn.execute("SELECT COUNT(*) FROM proforme").fetchone()[0]
+
+    originale = reg.emetti_proforma
+
+    def esplodi(conn_, **kw):
+        def rompi(c, pid):
+            raise RuntimeError("collegamento fallito")
+        kw["dopo_inserimento"] = rompi
+        return originale(conn_, **kw)
+
+    reg.emetti_proforma = esplodi
+    try:
+        with pytest.raises(RuntimeError):
+            genera_proforma(conn, 2, {"enpav_pct": "2"})
+    finally:
+        reg.emetti_proforma = originale
+
+    assert conn.execute("SELECT COUNT(*) FROM proforme").fetchone()[0] == prima, \
+        "la proforma e' rimasta anche se il collegamento e' fallito"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM prestazioni_eseguite WHERE proforma_id IS NOT NULL"
+    ).fetchone()[0] == 0

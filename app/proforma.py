@@ -42,8 +42,14 @@ def emetti_proforma(
     data_emissione: str, sconto_cliente_pct="0", enpav_pct="2",
     ritenuta_applicata: bool = False, ritenuta_pct="0", validita_giorni: int = 30,
     note: str = "",
+    dopo_inserimento=None,
 ) -> dict:
-    """Crea una proforma (numerazione propria 'P{n}/{anno}') e la restituisce."""
+    """Crea una proforma (numerazione propria 'P{n}/{anno}') e la restituisce.
+
+    ``dopo_inserimento(conn, proforma_id)`` viene eseguito **dentro** la stessa
+    transazione, prima del commit: serve a chi deve collegare altri record al
+    documento (il registro marca le voci) senza che possa restare a meta'.
+    """
     ris = calcola_fattura(
         righe, sconto_cliente_pct=sconto_cliente_pct, enpav_pct=enpav_pct,
         ritenuta_applicata=ritenuta_applicata, ritenuta_pct=ritenuta_pct)
@@ -85,6 +91,8 @@ def emetti_proforma(
                  str(rc.prezzo_unitario), str(rc.sconto_riga_pct), str(rc.aliquota_iva),
                  rc.tipo_spesa_ts, str(rc.imponibile_riga), ordine,
                  rc.paziente_id, rc.paziente_nome, rc.data_prestazione))
+        if dopo_inserimento is not None:
+            dopo_inserimento(conn, pid)
         conn.commit()
     except Exception:
         conn.rollback()
