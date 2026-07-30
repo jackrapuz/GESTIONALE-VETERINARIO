@@ -4,7 +4,9 @@ import sqlite3
 import pytest
 
 from app.db import get_conn, init_db
-from app.registro import annota, da_fatturare, genera_fattura, genera_proforma
+from app.registro import (
+    annota, da_fatturare, elimina_voce, genera_fattura, genera_proforma,
+)
 
 
 @pytest.fixture()
@@ -129,6 +131,45 @@ def test_proforma_non_consuma_le_voci(conn):
         "SELECT COUNT(*) FROM prestazioni_eseguite WHERE proforma_id IS NOT NULL"
     ).fetchone()[0]
     assert n_proforma == 3
+
+
+# --- correzione di un'annotazione sbagliata ---------------------------------
+
+def test_elimina_voce_non_fatturata(conn):
+    _annota_mensile(conn)
+    voci = da_fatturare(conn)[0]["voci"]
+    elimina_voce(conn, voci[0]["id"])
+    restanti = da_fatturare(conn)[0]["voci"]
+    assert len(restanti) == 2
+    assert voci[0]["id"] not in {v["id"] for v in restanti}
+
+
+def test_eliminare_una_voce_gia_fatturata_e_vietato(conn):
+    """Dentro una fattura la voce non si tocca piu': si storna, non si cancella."""
+    _annota_mensile(conn)
+    esito = genera_fattura(conn, 1, _studio(conn))
+    voce_id = conn.execute(
+        "SELECT id FROM prestazioni_eseguite WHERE fattura_id=? LIMIT 1", (esito["id"],)
+    ).fetchone()["id"]
+    with pytest.raises(ValueError, match="nota di credito"):
+        elimina_voce(conn, voce_id)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM prestazioni_eseguite WHERE id=?", (voce_id,)
+    ).fetchone()[0] == 1
+
+
+def test_eliminare_una_voce_inesistente_solleva(conn):
+    with pytest.raises(ValueError):
+        elimina_voce(conn, 999)
+
+
+def test_una_voce_in_proforma_si_puo_ancora_eliminare(conn):
+    """La proforma non e' fiscale: se la prestazione era sbagliata si toglie."""
+    _annota_mensile(conn)
+    genera_proforma(conn, 1, _studio(conn))
+    voce_id = da_fatturare(conn)[0]["voci"][0]["id"]
+    elimina_voce(conn, voce_id)
+    assert len(da_fatturare(conn)[0]["voci"]) == 2
 
 
 # --- sconto di anagrafica: i due percorsi devono coincidere -----------------

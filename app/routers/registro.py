@@ -15,7 +15,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.db import get_conn
-from app.registro import annota, da_fatturare, genera_fattura, genera_proforma
+from app.registro import (
+    annota, da_fatturare, elimina_voce, genera_fattura, genera_proforma,
+)
 from app.routers.fatture import (
     _clienti_per_select, _pazienti_per_cliente, _prestazioni_attive,
 )
@@ -103,6 +105,24 @@ async def crea(request: Request):
     finally:
         conn.close()
     return RedirectResponse("/registro?msg=Prestazione+annotata", status_code=303)
+
+
+@router.post("/registro/voce/{voce_id}/elimina")
+def elimina(voce_id: int):
+    """Toglie una prestazione annotata per errore (solo se non ancora fatturata).
+
+    Il percorso ha il segmento fisso ``voce`` per non confondersi con
+    ``/registro/{cliente_id}/...``, dove il numero e' un cliente e non una voce.
+    """
+    conn = get_conn()
+    try:
+        try:
+            elimina_voce(conn, voce_id)
+        except ValueError as e:
+            return RedirectResponse(f"/registro?msg=Errore:+{e}", status_code=303)
+    finally:
+        conn.close()
+    return RedirectResponse("/registro?msg=Prestazione+eliminata", status_code=303)
 
 
 @router.post("/registro/{cliente_id}/fattura")

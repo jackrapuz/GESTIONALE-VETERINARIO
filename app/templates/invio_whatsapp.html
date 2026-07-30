@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titolo %}Invio con WhatsApp{% endblock %}
+{% block contenuto %}
+{# Il PDF non puo' essere allegato dal programma: WhatsApp non lo permette senza
+   API a pagamento. Il file e' negli appunti, quindi restano due gesti in chat. #}
+<div class="scheda" style="max-width:620px; margin:0 auto">
+  <h1>Manda il documento</h1>
+  <p class="sub">
+    {{ 'Preventivo' if doc.tipo_documento == 'proforma' else
+       ('Nota di credito' if doc.tipo_documento == 'nota_credito' else 'Fattura') }}
+    n. {{ doc.numero_visualizzato }} a {{ doc.cli_denominazione }}
+  </p>
+
+  {% if invio.negli_appunti %}
+  <p class="nota-opposizione" style="margin:1rem 0">
+    Il PDF è stato <strong>copiato</strong>: in WhatsApp ti basterà incollarlo.
+  </p>
+  {% else %}
+  <p class="nota-opposizione" style="margin:1rem 0">
+    Non è stato possibile copiare il PDF negli appunti. Puoi allegarlo a mano con la
+    <strong>graffetta</strong> di WhatsApp: il file è
+    <strong>{{ invio.percorso.name }}</strong>, nella cartella
+    <code>{{ invio.cartella }}</code>.
+  </p>
+  {% endif %}
+
+  <ol class="passi-invio">
+    <li>Premi <strong>Apri WhatsApp</strong> qui sotto: si apre la chat del cliente
+      con il messaggio già scritto.</li>
+    <li>Premi <strong>Ctrl+V</strong> per allegare il PDF.</li>
+    <li>Premi <strong>Invio</strong> per mandarlo.</li>
+  </ol>
+
+  <div class="azioni" style="margin-top:1.4rem">
+    <a class="btn" href="{{ invio.link }}" target="_blank" rel="noopener">Apri WhatsApp</a>
+    <a class="btn secondario" href="{{ ritorno }}">← Torna al documento</a>
+  </div>
+
+  <p class="muted" style="margin-top:1.2rem; font-size:.88rem">
+    Il PDF resta salvato in <code>{{ invio.cartella }}</code>, se ti servisse più tardi.
+    Se WhatsApp non si apre, vedi la <strong>guida</strong>: va collegato una volta sola
+    a questo computer.
+  </p>
+</div>
+{% endblock %}

@@ -18,11 +18,10 @@ _CAMPI = [
     "via", "cap", "citta", "prov", "email", "telefono", "iban", "regime",
     "n_iscrizione_albo", "enpav_pct", "iva_default_pct", "formato_numerazione",
     "testo_dicitura_opposizione_ts", "logo_path",
-    "smtp_host", "smtp_porta", "smtp_sicurezza", "smtp_utente", "smtp_password",
-    "smtp_mittente",
 ]
-# Campi booleani (checkbox).
-_CHECKBOX = ["invio_auto_email"]
+# Campi booleani (checkbox). Nessuno al momento: l'invio via WhatsApp non ha
+# niente da configurare (le colonne smtp_* sono morte, vedi migrazione v4).
+_CHECKBOX: list[str] = []
 
 
 def leggi_studio(conn) -> dict:

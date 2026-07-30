@@ -50,5 +50,41 @@
     </form>
   </footer>
   {% block scripts %}{% endblock %}
+
+  {% if not senza_battito %}
+  {# Battito: dice al programma che una pagina e' ancora aperta. Se il browser
+     viene chiuso i battiti cessano e il gestionale si spegne da se' (vedi
+     GRAZIA_SECONDI in app/main.py). #}
+  <script>
+  (function () {
+    var INTERVALLO = 30000;   // mezzo minuto: sta dentro la finestra di grazia
+    var falliti = 0;          // un errore isolato non vuol dire "server morto"
+
+    function avvisaSpento() {
+      if (document.getElementById('avviso-spento')) return;
+      var d = document.createElement('div');
+      d.id = 'avviso-spento';
+      d.className = 'avviso-spento';
+      d.innerHTML = '<strong>Il gestionale si &egrave; chiuso</strong> perch&eacute; non era in uso. ' +
+        'I dati sono salvati: riaprilo col doppio clic sull\'icona <em>Gestionale Studio</em>.';
+      document.body.appendChild(d);
+    }
+
+    function battito() {
+      fetch('/battito', { method: 'POST', keepalive: true })
+        .then(function (r) { if (r.ok || r.status === 204) falliti = 0; })
+        .catch(function () { if (++falliti >= 2) avvisaSpento(); });
+    }
+
+    // Tornando sulla scheda, batti subito: se il browser l'aveva congelata,
+    // questo la rimette in vita senza aspettare il prossimo giro.
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) battito();
+    });
+
+    setInterval(battito, INTERVALLO);
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>

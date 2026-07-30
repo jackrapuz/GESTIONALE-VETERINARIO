@@ -9,13 +9,14 @@ from __future__ import annotations
 import socket
 import sys
 import threading
+import time
 import webbrowser
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -23,6 +24,37 @@ from app.db import DATI_DIR, get_conn, init_db
 from app.templating import templates
 
 BASE_DIR = Path(__file__).resolve().parent
+
+# --- Spegnimento automatico quando nessuno lo sta usando --------------------
+# Senza finestra del terminale, chiudere il browser lasciava il server vivo e
+# invisibile: nessun segno che fosse acceso, e l'unico modo di fermarlo era il
+# Gestione attivita' di Windows. Ora ogni pagina aperta manda un "battito": se
+# non ne arrivano piu' (browser chiuso), il gestionale si spegne da se'.
+GRAZIA_SECONDI = 180.0     # silenzio tollerato prima di spegnersi
+INTERVALLO_CONTROLLO = 20.0  # ogni quanto il guardiano ricontrolla
+
+# Orologio monotono: immune ai cambi di ora del sistema.
+_ultima_vita: float = time.monotonic()
+
+
+def segna_vita() -> None:
+    """Registra che qualcuno sta usando il programma proprio adesso."""
+    global _ultima_vita
+    _ultima_vita = time.monotonic()
+
+
+def _guardiano(server: uvicorn.Server) -> None:
+    """Spegne il server quando non si sente piu' nessuno.
+
+    Gira come thread demone: se il server muore per altre vie, non trattiene il
+    processo in vita.
+    """
+    while not server.should_exit:
+        time.sleep(INTERVALLO_CONTROLLO)
+        if time.monotonic() - _ultima_vita > GRAZIA_SECONDI:
+            print("Nessuna pagina aperta da un po': il gestionale si spegne.")
+            server.should_exit = True
+            return
 
 
 def _statistiche_dashboard() -> dict:
@@ -73,6 +105,17 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Gestionale Fatturazione", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
+    @app.middleware("http")
+    async def tieni_in_vita(request: Request, call_next):
+        """Qualunque richiesta vale come segno di vita.
+
+        Cosi' il programma non si spegne mentre lo si sta usando anche se il
+        battito della pagina non arrivasse (JavaScript disattivato, pagina vecchia
+        rimasta in cache).
+        """
+        segna_vita()
+        return await call_next(request)
+
     # Router delle sezioni (registrati man mano che vengono implementati).
     from app.routers import (
         backup, clienti, export, fatture, impostazioni, pazienti, prestazioni,
@@ -100,17 +143,31 @@ def create_app() -> FastAPI:
         """Serve a un secondo avvio per riconoscere che il gestionale gira gia'."""
         return "gestionale-veterinario"
 
+    @app.post("/battito")
+    def battito():
+        """Segnale periodico delle pagine aperte: "sono ancora qui".
+
+        Il lavoro lo fa il middleware; questa rotta esiste per dare al browser
+        qualcosa di leggerissimo da chiamare ogni mezzo minuto.
+        """
+        return Response(status_code=204)
+
     @app.post("/spegni", response_class=HTMLResponse)
     def spegni(request: Request):
         """Ferma il gestionale.
 
-        Senza finestra del terminale non c'e' altro modo di chiuderlo. L'arresto
-        e' rimandato di un istante, altrimenti il server morirebbe prima di aver
-        consegnato questa pagina e l'utente resterebbe con un errore del browser.
+        L'arresto e' rimandato di un istante, altrimenti il server morirebbe prima
+        di aver consegnato questa pagina e l'utente resterebbe con un errore del
+        browser.
+
+        ``senza_battito`` toglie il battito da *questa* pagina: continuando a
+        chiamare un server che sta morendo, mostrerebbe l'avviso "si e' chiuso da
+        solo" proprio dove c'e' scritto che l'hai chiuso tu.
         """
         if _server is not None:
             threading.Timer(1.0, lambda: setattr(_server, "should_exit", True)).start()
-        return templates.TemplateResponse(request, "spento.html", {"titolo": "Chiuso"})
+        return templates.TemplateResponse(
+            request, "spento.html", {"titolo": "Chiuso", "senza_battito": True})
 
     return app
 
@@ -199,6 +256,10 @@ def main() -> None:
         print(f"Gestionale avviato su {url}")
         _server = uvicorn.Server(
             uvicorn.Config(app, host="127.0.0.1", port=porta, log_level="warning"))
+        # Il conto alla rovescia parte da adesso: il browser ha tutta la finestra di
+        # grazia per aprirsi e mandare il primo battito.
+        segna_vita()
+        threading.Thread(target=_guardiano, args=(_server,), daemon=True).start()
         _server.run()
     except Exception as e:
         dove = f"\n\nDettagli in:\n{log}" if log else ""
