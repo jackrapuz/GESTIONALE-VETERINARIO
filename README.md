@@ -251,16 +251,61 @@ programma non lo può sapere.
 
 **Esportazioni** (scegli il periodo in alto):
 
-- **Sistema Tessera Sanitaria** — file nel tracciato TS per le spese veterinarie,
-  filtrato per **data di pagamento**. Il C.F. del proprietario viene **omesso in
-  caso di opposizione**. Vengono mostrati i documenti conformi e gli eventuali
-  **scarti** (con motivo e report scaricabile).
 - **Commercialista** — registro delle fatture del periodo in **Excel** e **CSV**
-  (con riepilogo IVA per aliquota) e un **ZIP con le copie PDF** delle fatture.
+  (con riepilogo IVA per aliquota) e un **ZIP con le copie PDF** dei documenti,
+  note di credito comprese. Nell'Excel importi e date sono **valori veri**, non
+  testo: le colonne si sommano e si ordinano.
+- **Sistema Tessera Sanitaria** — spese veterinarie, filtrate per **data di
+  pagamento** (il Sistema TS segue la cassa). ⚠️ **Il file da caricare sul
+  portale non è ancora generabile:** vedi sotto.
 
-> Il tracciato del Sistema TS cambia nel tempo: il formato esatto dei campi è
-> isolato nel file `app/tracciato_ts.py`, facile da aggiornare senza toccare il
-> resto. **Verifica sempre la versione ufficiale corrente prima di un invio reale.**
+### Sistema TS: stato del lavoro
+
+Il modello dei dati è conforme al disciplinare tecnico (Allegato A al DM
+19/10/2020) e vive in `app/tracciato_ts.py`:
+
+    Fornitura
+      └─ DocumentoFiscale *
+           ├─ IdSpesa (P.IVA + data emissione + dispositivo + progressivo)
+           ├─ data pagamento, flag pagamento anticipato, flag operazione
+           ├─ codice fiscale assistito (omesso in caso di opposizione)
+           ├─ modalità pagamento, tipo documento
+           └─ VoceSpesa *  ← **una per riga di fattura**, con tipologia FV/SV/AA
+
+Il punto delicato è la **ripartizione**: il database tiene l'imponibile per riga,
+mentre ENPAV e IVA sono calcolati e arrotondati per gruppo di aliquota. Il lordo
+di gruppo viene ripartito in proporzione, con il residuo assegnato a una riga
+sola secondo una regola deterministica; la validazione **rifiuta** il documento
+se le voci non sommano esattamente il totale della fattura. Un file che dichiara
+un importo diverso da quello fatturato passerebbe i controlli formali del portale
+e sbaglierebbe la detrazione.
+
+L'esito è diviso in **tre**, non in due:
+
+| Esito | Significato |
+|---|---|
+| Da trasmettere | pronti per l'invio |
+| Fuori ambito | la detrazione riguarda le **persone fisiche**: le fatture a clienti con P.IVA non vanno al TS. Non c'è nulla da correggere |
+| Da correggere | dovrebbero andare ma hanno dati mancanti o incoerenti |
+
+**Cosa manca per completare**, e perché non è stato indovinato:
+
+1. **L'XSD corrente delle spese veterinarie** → `app/ts_xml.py`. Il file è un XML
+   compresso, non un CSV, e lo zip caricato sul portale non supera i 5 MB.
+2. **Il certificato X.509 del Sistema TS** → `app/ts_cifratura.py`. Il codice
+   fiscale «deve essere sempre cifrato utilizzando la chiave pubblica RSA
+   contenuta nel certificato X.509 fornito dal sistema TS ed applicando il
+   padding PKCS#1 v1.5» (par. 4.4); in chiaro viene scartato.
+
+Entrambi stanno nell'area riservata di `sistemats.it`, raggiungibile con le
+credenziali della professionista (che arrivano via PEC tramite Ordine/FNOVI).
+Le due funzioni esistono già con la firma definitiva e sollevano
+`NotImplementedError` con l'istruzione su cosa serve: una versione precedente di
+questo export era stata scritta "a occhio" sul disciplinare e produceva un file
+che il portale avrebbe respinto, indistinguibile da uno giusto fino alla scadenza.
+
+Le tre modalità di invio previste dal Sistema TS sono: inserimento manuale a web,
+**upload di un file** (zip contenente XML, max 5 MB) e web service.
 
 ## 9. Backup e ripristino
 
@@ -321,7 +366,9 @@ app/            codice dell'applicazione (server, calcolo, PDF, invio, export, b
   registro.py       diario delle prestazioni eseguite (da cui nascono le fatture)
   invio.py          invio WhatsApp (PDF negli appunti + link wa.me)
   marchio.py        marchio come maschera colorabile, per schermo e PDF
-  tracciato_ts.py   *** layout campi Sistema TS, isolato e versionato ***
+  tracciato_ts.py   *** modello dati Sistema TS, isolato e documentato ***
+  ts_xml.py         scrittura XML per il TS — DA COMPLETARE (serve l'XSD)
+  ts_cifratura.py   cifratura RSA del C.F. — DA COMPLETARE (serve il certificato)
 dati/           database, backup e da_inviare/ (creata da sola; NON versionata)
 dati_esempio/   dati finti per il collaudo
 tests/          test automatici
