@@ -19,6 +19,11 @@ dist/
 *.spec
 !Gestionale.spec
 
+# Pacchetti delle versioni consegnate: 30 MB l'uno, e il repository e' pubblico.
+# Restano SOLO in locale e sono l'unica copia degli eseguibili gia' consegnati:
+# vedi VERSIONI.md, che e' invece versionato.
+versioni/
+
 # Sistema / editor
 Thumbs.db
 Desktop.ini
