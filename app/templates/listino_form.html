@@ -17,7 +17,22 @@
     <div class="campo"><label>Unità di misura</label><input name="unita_misura" value="{{ prestazione.unita_misura|default('nr') }}"></div>
   </div>
   <div class="riga">
-    <div class="campo"><label>Tipo spesa TS</label><input name="tipo_spesa_ts" value="{{ prestazione.tipo_spesa_ts|default('SV') }}"></div>
+    {# Elenco chiuso: sono gli unici codici che il Sistema TS accetta da un
+       veterinario, e questo valore finisce nello snapshot delle fatture. #}
+    <div class="campo"><label>Tipo spesa TS</label>
+      <select name="tipo_spesa_ts">
+        {% set scelto = prestazione.tipo_spesa_ts|default('SV') %}
+        {# Un valore salvato prima che l'elenco fosse chiuso resta visibile ed e'
+           selezionato: sostituirlo di nascosto con SV cambierebbe il listino
+           senza dirlo. Il salvataggio lo rifiuta, cosi' va scelto a mano. #}
+        {% if scelto not in TIPI_SPESA_TS %}
+        <option value="{{ scelto }}" selected>{{ scelto }} — non valido, da correggere</option>
+        {% endif %}
+        {% for codice, etichetta in TIPI_SPESA_TS.items() %}
+        <option value="{{ codice }}" {{ 'selected' if codice == scelto }}>
+          {{ codice }} — {{ etichetta }}</option>
+        {% endfor %}
+      </select></div>
     <div class="campo check"><input type="checkbox" id="attiva" name="attiva" {{ 'checked' if prestazione.attiva }}><label for="attiva">Attiva</label></div>
   </div>
   <div class="azioni">

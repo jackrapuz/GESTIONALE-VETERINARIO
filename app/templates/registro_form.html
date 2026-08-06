@@ -49,8 +49,16 @@
       <input type="number" step="0.01" name="sconto_riga_pct" value="{{ dati.sconto_riga_pct or '0' }}"></div>
     <div class="campo"><label>IVA %</label>
       <input type="number" step="0.01" name="aliquota_iva" id="aliquota_iva" value="{{ dati.aliquota_iva or '22' }}"></div>
+    {# Elenco chiuso (vedi listino_form.html): il valore finisce nello snapshot
+       immutabile della riga di fattura, quindi non puo' essere testo libero. #}
     <div class="campo"><label>Sp. TS</label>
-      <input name="tipo_spesa_ts" id="tipo_spesa_ts" value="{{ dati.tipo_spesa_ts or 'SV' }}" style="width:4.5rem"></div>
+      <select name="tipo_spesa_ts" id="tipo_spesa_ts">
+        {% set scelto = dati.tipo_spesa_ts or 'SV' %}
+        {% for codice, etichetta in TIPI_SPESA_TS.items() %}
+        <option value="{{ codice }}" {{ 'selected' if codice == scelto }}
+                title="{{ etichetta }}">{{ codice }} — {{ etichetta }}</option>
+        {% endfor %}
+      </select></div>
   </div>
 
   <div class="campo"><label>Note</label>

@@ -137,7 +137,13 @@
     <td class="num"><input class="num" type="number" step="0.01" name="r_prezzo" value="0.00"></td>
     <td class="num"><input class="num" type="number" step="0.01" name="r_sconto" value="0"></td>
     <td class="num"><input class="num" type="number" step="0.01" name="r_aliquota" value="22"></td>
-    <td><input name="r_tipo_spesa" value="SV" style="width:4.5rem"></td>
+    {# Elenco chiuso: vedi listino_form.html. Da qui il codice entra nello
+       snapshot immutabile della riga di fattura. #}
+    <td><select name="r_tipo_spesa">
+      {% for codice, etichetta in TIPI_SPESA_TS.items() %}
+      <option value="{{ codice }}" title="{{ etichetta }}">{{ codice }}</option>
+      {% endfor %}
+    </select></td>
     <td class="num imp-riga">0,00</td>
     <td><button type="button" class="btn secondario rimuovi" title="Rimuovi">✕</button></td>
   </tr>

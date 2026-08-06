@@ -23,6 +23,7 @@ from app.routers.fatture import (
 )
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
+from app.validazioni import normalizza_tipo_spesa_ts, valida_tipo_spesa_ts
 
 router = APIRouter()
 
@@ -76,6 +77,10 @@ async def crea(request: Request):
         prezzo = str(form.get("prezzo_unitario", "")).strip()
         if not descrizione:
             errori.append("Inserire la descrizione della prestazione.")
+        # Il valore attraversa il registro e finisce nello snapshot immutabile
+        # della riga di fattura: se e' fuori standard non si corregge piu'.
+        tipo_spesa = normalizza_tipo_spesa_ts(str(form.get("tipo_spesa_ts", "")))
+        errori += valida_tipo_spesa_ts(tipo_spesa)
 
         if errori:
             return templates.TemplateResponse(
@@ -99,7 +104,7 @@ async def crea(request: Request):
             prezzo_unitario=prezzo or "0.00",
             sconto_riga_pct=str(form.get("sconto_riga_pct", "0")).strip() or "0",
             aliquota_iva=str(form.get("aliquota_iva", "22")).strip() or "22",
-            tipo_spesa_ts=str(form.get("tipo_spesa_ts", "SV")).strip() or "SV",
+            tipo_spesa_ts=tipo_spesa,
             note=str(form.get("note", "")).strip(),
         )
     finally:

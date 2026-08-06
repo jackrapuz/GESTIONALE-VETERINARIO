@@ -7,6 +7,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.calcolo import q2
 from app.db import get_conn
 from app.templating import templates
+from app.validazioni import (
+    TIPI_SPESA_TS, normalizza_tipo_spesa_ts, valida_tipo_spesa_ts,
+)
 
 router = APIRouter()
 
@@ -20,8 +23,7 @@ def _estrai(form) -> dict:
     # normalizza importi/percentuali a 2 decimali
     dati["prezzo_unitario"] = str(q2(dati["prezzo_unitario"] or "0"))
     dati["aliquota_iva"] = str(q2(dati["aliquota_iva"] or "22"))
-    if not dati["tipo_spesa_ts"]:
-        dati["tipo_spesa_ts"] = "SV"
+    dati["tipo_spesa_ts"] = normalizza_tipo_spesa_ts(dati["tipo_spesa_ts"])
     return dati
 
 
@@ -29,6 +31,9 @@ def _valida(dati: dict) -> list[str]:
     errori: list[str] = []
     if not dati["descrizione"]:
         errori.append("La descrizione della prestazione e' obbligatoria.")
+    # Il menu offre solo i codici ammessi, ma la richiesta puo' arrivare comunque
+    # con altro: da qui il valore finisce negli snapshot immutabili delle fatture.
+    errori += valida_tipo_spesa_ts(dati["tipo_spesa_ts"])
     return errori
 
 
