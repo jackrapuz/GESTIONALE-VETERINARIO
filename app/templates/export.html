@@ -17,11 +17,29 @@
   <div class="card">
     <h2>Sistema Tessera Sanitaria</h2>
     <p>Spese veterinarie, filtrate per <strong>data di pagamento</strong>.</p>
-    <p class="muted">Tracciato: <code>{{ ts_versione }}</code></p>
-    <p>Documenti conformi: <strong>{{ ts_ok }}</strong> · scarti: <strong>{{ ts_scarti }}</strong></p>
+
+    {% if not ts_xml_pronto %}
+    {# Senza questo avviso la scheda sembrerebbe offrire il file buono, e chi non
+       e' tecnico lo caricherebbe sul portale prendendosi uno scarto. #}
+    <p class="nota-opposizione">
+      <strong>Il file da caricare sul portale non è ancora pronto.</strong>
+      Il Sistema TS vuole un XML compresso, con i codici fiscali cifrati: per
+      generarlo servono l'XSD ufficiale e il certificato del Sistema TS, che si
+      scaricano dall'area riservata di <code>sistemats.it</code>.
+      Qui sotto trovi solo un'<strong>anteprima di controllo</strong>: serve a
+      rileggere i dati, <em>non</em> si carica sul portale.
+    </p>
+    {% endif %}
+
+    <p>Da trasmettere: <strong>{{ ts_ok }}</strong>
+      {% if ts_esclusi %}· fuori ambito: <strong>{{ ts_esclusi }}</strong>{% endif %}
+      {% if ts_scarti %}· da correggere: <strong>{{ ts_scarti }}</strong>{% endif %}
+    </p>
     <p class="azioni">
-      <a class="btn" href="/export/ts.csv?dal={{ dal }}&al={{ al }}">Scarica CSV TS</a>
-      {% if ts_scarti %}<a class="btn secondario" href="/export/ts-scarti.csv?dal={{ dal }}&al={{ al }}">Report scarti</a>{% endif %}
+      <a class="btn secondario" href="/export/ts-anteprima.csv?dal={{ dal }}&al={{ al }}">Anteprima di controllo</a>
+      {% if ts_scarti or ts_esclusi %}
+      <a class="btn secondario" href="/export/ts-problemi.csv?dal={{ dal }}&al={{ al }}">Elenco problemi</a>
+      {% endif %}
     </p>
   </div>
 
@@ -38,12 +56,30 @@
 </div>
 
 {% if ts_dettaglio_scarti %}
-<h2 class="sez">Scarti Sistema TS nel periodo</h2>
+<h2 class="sez">Da correggere prima dell'invio</h2>
+<p class="muted">Questi documenti dovrebbero essere trasmessi, ma hanno dati mancanti
+  o incoerenti. Si correggono nella scheda del cliente o del documento.</p>
 <table>
   <thead><tr><th>Documento</th><th>Motivi</th></tr></thead>
   <tbody>
     {% for numero, motivi in ts_dettaglio_scarti %}
     <tr><td>{{ numero }}</td><td>{{ motivi|join('; ') }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if ts_dettaglio_esclusi %}
+{# Separati dagli scarti di proposito: non c'e' niente da correggere, e in uno
+   studio equino i clienti con partita IVA sono tanti. #}
+<h2 class="sez">Fuori dall'invio (non è un errore)</h2>
+<p class="muted">La detrazione delle spese veterinarie riguarda le persone fisiche:
+  questi documenti non vanno al Sistema TS e non richiedono alcuna correzione.</p>
+<table>
+  <thead><tr><th>Documento</th><th>Perché</th></tr></thead>
+  <tbody>
+    {% for numero, motivo in ts_dettaglio_esclusi %}
+    <tr><td>{{ numero }}</td><td>{{ motivo }}</td></tr>
     {% endfor %}
   </tbody>
 </table>
