@@ -319,7 +319,9 @@ def invia_whatsapp(request: Request, fid: int):
     return templates.TemplateResponse(
         request, "invio_whatsapp.html",
         {"titolo": f"Invio {f['numero_visualizzato']}", "doc": f,
-         "invio": esito, "ritorno": f"/fatture/{fid}"},
+         "invio": esito, "ritorno": f"/fatture/{fid}",
+         # Da qui la pagina prende il file da mostrare, scaricare e trascinare.
+         "pdf_url": f"/fatture/{fid}/pdf"},
     )
 
 

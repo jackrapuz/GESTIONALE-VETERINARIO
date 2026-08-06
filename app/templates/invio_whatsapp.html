@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block titolo %}Invio con WhatsApp{% endblock %}
 {% block contenuto %}
-{# Il PDF non puo' essere allegato dal programma: WhatsApp non lo permette senza
-   API a pagamento. Il file e' negli appunti, quindi restano due gesti in chat. #}
+{# Senza API il programma non puo' allegare il PDF da solo: deve *consegnarlo* a
+   lei. Tre strade, in ordine di comodita': trascinarlo nella chat, incollarlo
+   (e' gia' negli appunti), scaricarlo e allegarlo con la graffetta. Per questo
+   il file si vede: se la pagina lo descrivesse soltanto, non ci sarebbe niente
+   da prendere. #}
 <div class="scheda" style="max-width:620px; margin:0 auto">
   <h1>Manda il documento</h1>
   <p class="sub">
@@ -11,15 +14,33 @@
     n. {{ doc.numero_visualizzato }} a {{ doc.cli_denominazione }}
   </p>
 
+  <a class="file-pronto" id="file-pronto" draggable="true"
+     href="{{ pdf_url }}" download="{{ invio.percorso.name }}"
+     data-nome="{{ invio.percorso.name }}"
+     title="Trascinami nella chat di WhatsApp, oppure clicca per scaricarmi">
+    <svg class="icona-pdf" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M14 2.5H7a1.5 1.5 0 0 0-1.5 1.5v16A1.5 1.5 0 0 0 7 21.5h10a1.5 1.5 0 0 0 1.5-1.5V7z"/>
+      <path d="M14 2.5V7h4.5"/>
+      <path d="M8.5 13h7M8.5 16.5h4.5"/>
+    </svg>
+    <span class="dati">
+      <strong>{{ invio.percorso.name }}</strong>
+      <span class="muted">Trascinalo nella chat &nbsp;·&nbsp; oppure clicca per scaricarlo</span>
+    </span>
+  </a>
+
+  <embed class="anteprima-pdf" src="{{ pdf_url }}#toolbar=0&amp;navpanes=0"
+         type="application/pdf" title="Anteprima del documento">
+
   {% if invio.negli_appunti %}
   <p class="nota-opposizione" style="margin:1rem 0">
-    Il PDF è stato <strong>copiato</strong>: in WhatsApp ti basterà incollarlo.
+    Il PDF è anche <strong>copiato</strong>: se preferisci, in WhatsApp basta un Ctrl+V.
   </p>
   {% else %}
   <p class="nota-opposizione" style="margin:1rem 0">
-    Non è stato possibile copiare il PDF negli appunti. Puoi allegarlo a mano con la
-    <strong>graffetta</strong> di WhatsApp: il file è
-    <strong>{{ invio.percorso.name }}</strong>, nella cartella
+    Non è stato possibile copiare il PDF negli appunti: usa il trascinamento qui sopra,
+    oppure allegalo con la <strong>graffetta</strong> di WhatsApp prendendolo da
     <code>{{ invio.cartella }}</code>.
   </p>
   {% endif %}
@@ -27,7 +48,8 @@
   <ol class="passi-invio">
     <li>Premi <strong>Apri WhatsApp</strong> qui sotto: si apre la chat del cliente
       con il messaggio già scritto.</li>
-    <li>Premi <strong>Ctrl+V</strong> per allegare il PDF.</li>
+    <li><strong>Trascina</strong> il documento qui sopra dentro la chat — oppure premi
+      <strong>Ctrl+V</strong>.</li>
     <li>Premi <strong>Invio</strong> per mandarlo.</li>
   </ol>
 
@@ -42,4 +64,22 @@
     a questo computer.
   </p>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Trascinare un link porterebbe nella chat l'indirizzo della pagina, non il file.
+// "DownloadURL" dice al browser: quando ti lascio, scarica questo e consegnalo
+// come file vero. E' quello che rende possibile l'allegato senza API.
+(function () {
+  var a = document.getElementById('file-pronto');
+  if (!a) return;
+  a.addEventListener('dragstart', function (e) {
+    var indirizzo = new URL(a.getAttribute('href'), location.href).href;
+    e.dataTransfer.setData('DownloadURL',
+      'application/pdf:' + a.dataset.nome + ':' + indirizzo);
+    e.dataTransfer.effectAllowed = 'copy';
+  });
+})();
+</script>
 {% endblock %}

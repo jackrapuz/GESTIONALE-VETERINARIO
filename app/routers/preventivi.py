@@ -173,7 +173,8 @@ def invia_whatsapp(request: Request, pid: int):
     return templates.TemplateResponse(
         request, "invio_whatsapp.html",
         {"titolo": f"Invio {p['numero_visualizzato']}", "doc": p,
-         "invio": esito, "ritorno": f"/preventivi/{pid}"},
+         "invio": esito, "ritorno": f"/preventivi/{pid}",
+         "pdf_url": f"/preventivi/{pid}/pdf"},
     )
 
 

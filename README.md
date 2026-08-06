@@ -213,16 +213,28 @@ Dal documento, **Invia con WhatsApp**:
    (`Set-Clipboard -LiteralPath` via PowerShell, `-STA`);
 3. si apre `wa.me` sulla chat del cliente col **messaggio già scritto**.
 
-In chat restano due gesti: **Ctrl+V** per allegare il PDF e **Invio** per mandarlo.
+L'allegato non può essere attaccato dal programma, quindi la pagina d'invio
+**consegna il file**: lo mostra in anteprima e lo rende afferrabile in tre modi,
+dal più comodo al più manuale.
+
+| Via | Come | Dipende da |
+|---|---|---|
+| **Trascinamento** | si prende la scheda del PDF e si lascia cadere nella chat | `dataTransfer.setData('DownloadURL', …)` — Chrome/Edge |
+| **Ctrl+V** | il file è già negli appunti | `Set-Clipboard`, e che nessuna altra copia li sovrascriva |
+| **Graffetta** | si scarica (o si prende da `dati/da_inviare`) e si allega a mano | niente |
+
+Il trascinamento è la via principale proprio perché non dipende dagli appunti.
+Un link nudo, trascinato, porterebbe in chat l'**indirizzo della pagina**: è
+`DownloadURL` a far consegnare al browser un file vero.
+
 È il compromesso scelto consapevolmente:
 
 - l'**API ufficiale** (WhatsApp Business Cloud) richiede account business, numero
   dedicato, token da rinnovare, messaggi su modello approvato ed è a pagamento;
 - le librerie che **pilotano WhatsApp Web** si rompono a ogni aggiornamento e
   violano i termini d'uso;
-- quindi l'allegato non può essere attaccato dal programma. Gli appunti sono il
-  modo più corto che resta, e il gesto finale è anche l'ultimo controllo prima
-  che il documento parta.
+- quindi resta un gesto umano finale, che è anche l'ultimo controllo prima che il
+  documento parta.
 
 `fatture.whatsapp_at` registra quando un documento è stato **preparato** per
 l'invio, non che il cliente l'abbia ricevuto: quello succede dentro WhatsApp e il
