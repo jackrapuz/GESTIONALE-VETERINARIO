@@ -30,23 +30,29 @@
   </div>
 
   <h2 class="sez">Righe</h2>
+  {# Le percentuali contano solo con table-layout:fixed (vedi stile.css): senza,
+     la larghezza la decide il contenuto e i campi numerici si stringono fino a
+     non mostrare piu' le cifre. Il contenitore che scorre serve alle finestre
+     strette, dove nemmeno le percentuali bastano. #}
+  <div class="tabella-scroll">
   <table id="tab-righe" class="righe-fattura">
     <thead>
       <tr>
-        <th style="width:11%">Data</th>
-        <th style="width:14%">Cavallo</th>
-        <th style="width:21%">Descrizione</th>
-        <th class="num" style="width:7%">Q.tà</th>
+        <th style="width:10%">Data</th>
+        <th style="width:13%">Cavallo</th>
+        <th style="width:19%">Descrizione</th>
+        <th class="num" style="width:8%">Q.tà</th>
         <th class="num" style="width:11%">Prezzo €</th>
-        <th class="num" style="width:7%">Sc. %</th>
-        <th class="num" style="width:7%">IVA %</th>
-        <th style="width:6%">Sp. TS</th>
+        <th class="num" style="width:8%">Sc. %</th>
+        <th class="num" style="width:8%">IVA %</th>
+        <th style="width:8%">Sp. TS</th>
         <th class="num" style="width:11%">Imponibile</th>
-        <th style="width:2%"></th>
+        <th style="width:4%"></th>
       </tr>
     </thead>
     <tbody id="righe-body"></tbody>
   </table>
+  </div>
   <p><button type="button" class="btn secondario" id="agg-riga">+ Aggiungi riga</button>
      <span class="muted">oppure scegli dal listino:</span>
      <select id="add-listino">
@@ -133,10 +139,15 @@
     <td><input type="date" name="r_data"></td>
     <td><select name="r_paziente_id" class="sel-cavallo"><option value="">—</option></select></td>
     <td><input type="hidden" name="r_prestazione_id" value=""><input name="r_descrizione" placeholder="Descrizione prestazione"></td>
-    <td class="num"><input class="num" type="number" step="0.01" name="r_quantita" value="1"></td>
-    <td class="num"><input class="num" type="number" step="0.01" name="r_prezzo" value="0.00"></td>
-    <td class="num"><input class="num" type="number" step="0.01" name="r_sconto" value="0"></td>
-    <td class="num"><input class="num" type="number" step="0.01" name="r_aliquota" value="22"></td>
+    {# **Non `type="number"`.** Chi fattura in italiano scrive "45,50": un campo
+       numerico rifiuta la virgola, si svuota da solo e restituisce stringa vuota
+       al server — il prezzo diventa zero senza un errore, e chi scrive non vede
+       niente comparire. `inputmode="decimal"` tiene comunque il tastierino sul
+       tablet, e la virgola la converte gia' `dec()` in app/calcolo.py. #}
+    <td class="num"><input class="num" type="text" inputmode="decimal" name="r_quantita" value="1"></td>
+    <td class="num"><input class="num" type="text" inputmode="decimal" name="r_prezzo" value="0,00"></td>
+    <td class="num"><input class="num" type="text" inputmode="decimal" name="r_sconto" value="0"></td>
+    <td class="num"><input class="num" type="text" inputmode="decimal" name="r_aliquota" value="22"></td>
     {# Elenco chiuso: vedi listino_form.html. Da qui il codice entra nello
        snapshot immutabile della riga di fattura. #}
     <td><select name="r_tipo_spesa">

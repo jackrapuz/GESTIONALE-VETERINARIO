@@ -12,7 +12,7 @@ from urllib.parse import quote_plus
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from app.calcolo import RigaInput, dec, q2
+from app.calcolo import RigaInput, ValoreNonNumerico, dec, q2
 from app.db import get_conn
 from app.fatturazione import (
     denominazione_cliente, emetti_fattura, gruppi_iva_da_righe, leggi_fattura,
@@ -22,7 +22,9 @@ from app.numerazione import verifica_continuita
 from app.pdf_fattura import genera_pdf_fattura
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
-from app.validazioni import normalizza_tipo_spesa_ts, valida_tipo_spesa_ts
+from app.validazioni import (
+    normalizza_tipo_spesa_ts, valida_importi_riga, valida_tipo_spesa_ts,
+)
 
 router = APIRouter()
 
@@ -213,7 +215,13 @@ async def crea(request: Request):
                 errori.append("Cliente non trovato.")
 
         data_emissione = str(form.get("data_emissione", "")).strip() or date.today().isoformat()
-        righe = _righe_da_form(form, _nomi_pazienti(conn))
+        # Un importo scritto male e' un errore di chi compila, non un guasto del
+        # programma: va detto nel modulo, non in una pagina di errore di sistema.
+        try:
+            righe = _righe_da_form(form, _nomi_pazienti(conn))
+        except ValoreNonNumerico as e:
+            righe = []
+            errori.append(f"Importo non valido: {e}")
         if not righe:
             errori.append("Inserire almeno una riga con importo.")
         # Ultimo controllo prima dello snapshot immutabile: da qui in poi il tipo
@@ -221,6 +229,12 @@ async def crea(request: Request):
         # documento non trasmissibile al Sistema TS senza dare alcun segnale.
         for errore in {e for r in righe for e in valida_tipo_spesa_ts(r.tipo_spesa_ts)}:
             errori.append(errore)
+        # Stesso motivo, sugli importi: un'aliquota impossibile o una quantita' a
+        # zero producono un documento sbagliato che poi non si cancella.
+        for r in righe:
+            errori += valida_importi_riga(
+                r.descrizione, r.quantita, r.prezzo_unitario,
+                r.sconto_riga_pct, r.aliquota_iva)
 
         ritenuta_applicata = bool(form.get("ritenuta_applicata"))
         if ritenuta_applicata and cliente is not None and not cliente["sostituto_imposta"]:

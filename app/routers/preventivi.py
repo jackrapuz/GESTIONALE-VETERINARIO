@@ -12,7 +12,7 @@ from urllib.parse import quote_plus
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from app.calcolo import q2
+from app.calcolo import ValoreNonNumerico, q2
 from app.db import get_conn
 from app.fatturazione import gruppi_iva_da_righe
 from app.invio import TelefonoMancante, prepara_invio_whatsapp
@@ -26,6 +26,7 @@ from app.routers.fatture import (
 )
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
+from app.validazioni import valida_importi_riga
 
 router = APIRouter()
 
@@ -83,9 +84,19 @@ async def crea(request: Request):
             if cliente is None:
                 errori.append("Cliente non trovato.")
         data_emissione = str(form.get("data_emissione", "")).strip() or date.today().isoformat()
-        righe = _righe_da_form(form, _nomi_pazienti(conn))
+        try:
+            righe = _righe_da_form(form, _nomi_pazienti(conn))
+        except ValoreNonNumerico as e:
+            righe = []
+            errori.append(f"Importo non valido: {e}")
         if not righe:
             errori.append("Inserire almeno una riga con importo.")
+        # Il preventivo non e' immutabile, ma si converte in fattura: un importo
+        # impossibile passato di qui rientrerebbe dalla porta di servizio.
+        for r in righe:
+            errori += valida_importi_riga(
+                r.descrizione, r.quantita, r.prezzo_unitario,
+                r.sconto_riga_pct, r.aliquota_iva)
 
         if errori:
             return templates.TemplateResponse(

@@ -47,6 +47,8 @@
     var n = parseFloat(String(v == null ? "" : v).replace(",", "."));
     return isFinite(n) ? n : 0;
   }
+  // Il contrario di num(): dal punto del database alla virgola che si legge.
+  function virgola(v) { return String(v == null ? "" : v).replace(".", ","); }
   function round2(x) { return Math.round((x + Number.EPSILON) * 100) / 100; }
   function euro(x) {
     return (x || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -59,8 +61,11 @@
     if (preset) {
       tr.querySelector('[name=r_prestazione_id]').value = preset.id || "";
       tr.querySelector('[name=r_descrizione]').value = preset.descrizione || "";
-      tr.querySelector('[name=r_prezzo]').value = preset.prezzo_unitario || "0.00";
-      tr.querySelector('[name=r_aliquota]').value = preset.aliquota_iva || "22";
+      // Con la virgola, come si scrive un prezzo qui: il campo e' di testo
+      // apposta, e chi legge non deve vedere due notazioni diverse nella stessa
+      // colonna a seconda che la riga venga dal listino o l'abbia scritta lei.
+      tr.querySelector('[name=r_prezzo]').value = virgola(preset.prezzo_unitario || "0,00");
+      tr.querySelector('[name=r_aliquota]').value = virgola(preset.aliquota_iva || "22");
       tr.querySelector('[name=r_tipo_spesa]').value = preset.tipo_spesa_ts || "SV";
     }
     tr.querySelector(".rimuovi").addEventListener("click", function () {
