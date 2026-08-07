@@ -386,6 +386,14 @@ td.x {{ text-align:center; color:var(--nebbia); font-size:1.05rem; }}
         <li>Premi <span class="tasti">Invio</span> e il documento &egrave; partito.</li>
       </ol>
       <div class="nota nota--info">
+        <span class="nota__i">&#33;</span>
+        <div><strong>Se WhatsApp ti si apre dentro il browser</strong> (WhatsApp Web, in
+        una scheda) invece che nel suo programma, il trascinamento <strong>non
+        funziona</strong>: nella chat finirebbe un indirizzo invece del documento. L&igrave;
+        usa <span class="tasti">Ctrl</span> + <span class="tasti">V</span>, oppure la
+        <strong>graffetta</strong>. Nel programma di WhatsApp invece il trascinamento va.</div>
+      </div>
+      <div class="nota nota--info">
         <span class="nota__i">&#10003;</span>
         <div><strong>Perch&eacute; devi farlo tu?</strong> WhatsApp non permette a un programma
         di attaccare file da solo. Il gestionale allora ti <em>mette il file in mano</em>:
@@ -548,14 +556,21 @@ td.x {{ text-align:center; color:var(--nebbia); font-size:1.05rem; }}
           sostituendo il vecchio, e i tuoi dati tornano. La regola per gli aggiornamenti
           &egrave; una sola: <strong>sostituire l'exe sul posto, mai spostarlo</strong>.</li>
         <li><strong>Premo "Apri WhatsApp" e non si apre niente.</strong> Vuol dire che
-          WhatsApp non &egrave; collegato a questo computer: rifai il caso
-          <strong>3</strong>. Controlla anche che il telefono sia accesso e connesso.</li>
+          il programma di WhatsApp non &egrave; installato su questo computer. Sulla
+          stessa pagina, sotto il pulsante, c'&egrave; scritto <em>"usa WhatsApp
+          Web"</em>: quello si apre nel browser. Se invece si apre ma la chat resta
+          vuota, WhatsApp non &egrave; collegato: rifai il caso <strong>3</strong>, e
+          controlla che il telefono sia acceso e connesso.</li>
         <li><strong>Ho premuto Ctrl+V e non si allega nulla.</strong> Clicca prima
-          <em>dentro</em> il campo del messaggio, poi riprova. Oppure lascia perdere gli
-          appunti e <strong>trascina</strong> il PDF dalla pagina di invio dentro la chat.
-          Se ancora niente, clicca la scheda del PDF per scaricarlo e allegalo con la
-          <strong>graffetta</strong>: lo trovi anche nella cartella
-          <strong>dati &rarr; da_inviare</strong>.</li>
+          <em>dentro</em> il campo del messaggio, poi riprova. Se ancora niente, clicca
+          la scheda del PDF per scaricarlo e allegalo con la <strong>graffetta</strong>:
+          lo trovi anche nella cartella <strong>dati &rarr; da_inviare</strong>.</li>
+        <li><strong>Trascino il PDF nella chat e arriva un indirizzo, non il
+          documento.</strong> Stai usando WhatsApp <strong>Web</strong>, dentro il
+          browser: l&igrave; il trascinamento non consegna il file. Cancella quel
+          messaggio e usa <span class="tasti">Ctrl</span> + <span class="tasti">V</span>
+          o la <strong>graffetta</strong>. Il trascinamento funziona nel programma di
+          WhatsApp, non nella scheda del browser.</li>
         <li><strong>Ho sbagliato una prestazione nel Registro.</strong> Premi la
           <strong>&times;</strong> in fondo alla riga: si toglie. Ma solo se quel cliente
           non &egrave; ancora stato fatturato.</li>
