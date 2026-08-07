@@ -65,7 +65,7 @@
 
   <div class="riga">
     <div class="campo"><label>Sconto cliente %</label>
-      <input type="number" step="0.01" min="0" name="sconto_cliente_pct" id="sconto_cliente_pct"
+      <input type="text" inputmode="decimal" name="sconto_cliente_pct" id="sconto_cliente_pct"
              value="{{ dati.sconto_cliente_pct or '0' }}"></div>
     {% if not is_prev %}
     <div class="campo"><label>Modalità pagamento</label>
@@ -106,7 +106,7 @@
       <div class="campo check"><input type="checkbox" id="ritenuta_applicata" name="ritenuta_applicata"
                {{ 'checked' if dati.ritenuta_applicata }}><label for="ritenuta_applicata">Applica ritenuta d'acconto</label></div>
       <div class="campo" id="box-ritenuta"><label>Ritenuta %</label>
-        <input type="number" step="0.01" min="0" name="ritenuta_pct" id="ritenuta_pct"
+        <input type="text" inputmode="decimal" name="ritenuta_pct" id="ritenuta_pct"
                value="{{ dati.ritenuta_pct or '20' }}"></div>
     </div>
   </details>

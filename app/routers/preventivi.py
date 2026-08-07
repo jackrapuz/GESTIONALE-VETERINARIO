@@ -27,7 +27,7 @@ from app.routers.fatture import (
 )
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
-from app.validazioni import valida_importi_riga
+from app.validazioni import valida_importi_riga, valida_percentuale
 
 router = APIRouter()
 
@@ -98,6 +98,13 @@ async def crea(request: Request):
             errori += valida_importi_riga(
                 r.descrizione, r.quantita, r.prezzo_unitario,
                 r.sconto_riga_pct, r.aliquota_iva)
+        # Le percentuali fuori dalle righe: stesse di fatture.py, stesso motivo.
+        errori += valida_percentuale(
+            form.get("sconto_cliente_pct") or "0", "Sconto cliente")
+        errori += valida_percentuale(
+            form.get("ritenuta_pct") or "0", "Ritenuta d'acconto")
+        for e in valida_percentuale(studio.get("enpav_pct") or "2", "Contributo ENPAV"):
+            errori.append(e + " Si corregge in Impostazioni.")
 
         if errori:
             return templates.TemplateResponse(

@@ -33,8 +33,13 @@
     <div class="campo"><label>Regime</label><input name="regime" value="{{ studio.regime }}"></div>
   </div>
   <div class="riga">
-    <div class="campo"><label>ENPAV %</label><input name="enpav_pct" value="{{ studio.enpav_pct }}"></div>
-    <div class="campo"><label>IVA default %</label><input name="iva_default_pct" value="{{ studio.iva_default_pct }}"></div>
+    {# Queste due non restano qui: vengono rilette a ogni emissione di fattura.
+       Sono validate lato server prima del salvataggio (vedi salva_impostazioni),
+       perche' un valore rovinato qui bloccherebbe tutta la fatturazione. #}
+    <div class="campo"><label>ENPAV %</label>
+      <input name="enpav_pct" inputmode="decimal" value="{{ studio.enpav_pct }}"></div>
+    <div class="campo"><label>IVA default %</label>
+      <input name="iva_default_pct" inputmode="decimal" value="{{ studio.iva_default_pct }}"></div>
     <div class="campo"><label>Formato numerazione</label><input name="formato_numerazione" value="{{ studio.formato_numerazione }}"></div>
   </div>
   <div class="riga">

@@ -70,8 +70,18 @@ def ripristina(nome_backup: str) -> Path:
 
     Crea prima una copia di sicurezza del DB corrente. Solleva ``ValueError`` se
     il file non esiste o non e' un DB valido.
+
+    ``nome_backup`` arriva da un modulo, quindi si prende **solo il nome**: un
+    valore come ``..\\..\\altro.db`` uscirebbe dalla cartella dei backup e
+    farebbe sovrascrivere il database con un file qualsiasi del computer. Non e'
+    un attacco - qui l'unica che usa il programma e' la dottoressa - ma
+    l'operazione piu' distruttiva che il gestionale sa fare non deve poter
+    puntare fuori dalla sua cartella.
     """
-    origine = BACKUP_DIR / nome_backup
+    nome = Path(nome_backup or "").name
+    if not nome:
+        raise ValueError("File di backup non trovato.")
+    origine = BACKUP_DIR / nome
     if not origine.exists():
         raise ValueError("File di backup non trovato.")
     return ripristina_da_file(origine)

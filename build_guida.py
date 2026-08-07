@@ -4,7 +4,8 @@
 
 Il file prodotto e' **autosufficiente**: il marchio viene incorporato in base64
 dentro il CSS, quindi la guida si apre con un doppio clic, funziona offline e si
-stampa. Viene scritta in radice e, se esiste ``dist/``, anche accanto all'exe.
+stampa. Viene scritta in radice e, se esiste, anche dentro ``dist/Gestionale/``,
+cioe' la cartella che si consegna.
 
 La guida e' scritta per **scenari**, non per funzioni: "una visita e la fatturi
 subito", "cliente mensile con piu' cavalli", "il cliente ti paga". Ogni etichetta
@@ -14,6 +15,7 @@ pulsante viene rinominato, questo file va aggiornato.
 Nota: i nomi di clienti e cavalli negli esempi sono **inventati**. Questo
 repository e' pubblico e i dati reali non ci devono finire.
 """
+import shutil
 from base64 import b64encode
 from pathlib import Path
 
@@ -201,11 +203,16 @@ td.x {{ text-align:center; color:var(--nebbia); font-size:1.05rem; }}
       <p class="situazione">&laquo;Giacomo mi ha dato il programma. Cosa devo fare per
       averlo sul mio computer?&raquo;</p>
       <ol class="passi">
-        <li>Crea una cartella sul computer &mdash; per esempio <strong>C:\\Gestionale</strong>
-          &mdash; e copiaci dentro i tre file: <strong>Gestionale.exe</strong> (il programma),
-          <strong>crea_collegamento.bat</strong> e <strong>GUIDA.html</strong> (questa guida).</li>
-        <li>Doppio clic su <strong>crea_collegamento.bat</strong>: mette sul Desktop l'icona
-          <em>Gestionale Studio</em>. Scrive "Fatto" e si chiude premendo un tasto.</li>
+        <li>Ti arriva una <strong>cartella</strong> di nome <strong>Gestionale</strong>.
+          Copiala <em>tutta intera</em> dove vuoi tenerla &mdash; per esempio dentro
+          <strong>Documenti</strong>. Dentro c'&egrave; <strong>Gestionale.exe</strong> (il
+          programma), una cartella <strong>_internal</strong> con le librerie, questa guida e
+          <strong>crea_collegamento.bat</strong>.</li>
+        <li><strong>Non estrarre il solo Gestionale.exe</strong> e non spostarlo fuori dalla
+          cartella: senza <strong>_internal</strong> accanto non parte. Vanno insieme.</li>
+        <li>Apri la cartella e fai doppio clic su <strong>crea_collegamento.bat</strong>: mette
+          sul Desktop l'icona <em>Gestionale Studio</em>. Scrive "Fatto" e si chiude premendo
+          un tasto.</li>
         <li>Doppio clic sull'icona. Si apre il browser sul gestionale: quella &egrave;
           l'applicazione. Ogni avvio richiede qualche secondo, il primo un po' di pi&ugrave;.</li>
         <li>Se compare un riquadro blu <strong>"Windows ha protetto il PC"</strong>, non &egrave;
@@ -216,15 +223,30 @@ td.x {{ text-align:center; color:var(--nebbia); font-size:1.05rem; }}
       <div class="nota nota--attenzione">
         <span class="nota__i">&#9888;</span>
         <div><strong>Non metterlo in OneDrive, Dropbox o Google Drive.</strong> I tuoi dati
-        stanno in una cartella <strong>dati</strong> accanto al programma, e le cartelle
-        sincronizzate copiano i file <em>mentre</em> il programma li sta scrivendo: si
-        rischia di rovinare l'archivio delle fatture. Una cartella normale del computer &egrave;
-        il posto giusto. Per avere una copia altrove c'&egrave; il <strong>Backup</strong>
-        (caso 11), che &egrave; il modo sicuro di farlo.</div>
+        stanno in una cartella <strong>dati</strong> dentro quella del programma, e le
+        cartelle sincronizzate copiano i file <em>mentre</em> il programma li sta scrivendo:
+        si rischia di rovinare l'archivio delle fatture. Una cartella normale del computer
+        &egrave; il posto giusto. Per avere una copia altrove c'&egrave; il
+        <strong>Backup</strong> (caso 11), che &egrave; il modo sicuro di farlo.</div>
+      </div>
+      <div class="nota nota--info">
+        <span class="nota__i">&#8635;</span>
+        <div><strong>Quando Giacomo ti manda una versione nuova.</strong> Prima
+        <strong>chiudi il gestionale</strong> col pulsante in fondo alla pagina: Windows non
+        lascia sostituire un programma mentre sta girando. Poi estrai il pacchetto nuovo
+        <strong>sopra la cartella che hai gi&agrave;</strong> e rispondi
+        <em>Sostituisci i file nella destinazione</em>.
+        <br><br>
+        <strong>Non cancellare la cartella vecchia per far posto a quella nuova:</strong>
+        dentro ci sono i tuoi dati. Sostituire &egrave; giusto, cancellare no. Se vuoi stare
+        tranquilla, fai un <strong>Backup</strong> prima (caso 11).
+        <br><br>
+        Per sapere quale versione hai in questo momento, guarda in fondo a qualsiasi pagina
+        del gestionale: c'&egrave; scritto <em>versione</em> e una data.</div>
       </div>
       <p class="risultato"><b>Se un giorno lo sposti &rarr;</b> sposta <strong>tutta la
-      cartella</strong>, non solo il programma: i tuoi dati sono nella cartella
-      <strong>dati</strong> che gli sta accanto. Poi ridai doppio clic su
+      cartella</strong>, non solo il programma: dentro ci sono sia le librerie che gli
+      servono sia i tuoi dati. Poi ridai doppio clic su
       <em>crea_collegamento.bat</em> per rifare l'icona.</p>
       <p class="dim piccolo">Se l'antivirus si insospettisce del programma &egrave; un falso
       allarme (succede con i programmi costruiti cos&igrave;): chiedi a Giacomo prima di
@@ -550,11 +572,10 @@ td.x {{ text-align:center; color:var(--nebbia); font-size:1.05rem; }}
           scheda e ridai doppio clic sull'icona.</li>
         <li><strong>Ho aggiornato il programma e sembra vuoto: non ci sono pi&ugrave; le
           fatture.</strong> Non hai perso niente. Il programma legge i dati dalla cartella
-          <strong>dati</strong> che sta <em>accanto</em> a Gestionale.exe: se l'exe nuovo
-          &egrave; finito in un'altra cartella, l&igrave; ha creato un archivio nuovo e
-          vuoto. Rimetti l'exe nuovo <strong>nella stessa cartella di prima</strong>,
-          sostituendo il vecchio, e i tuoi dati tornano. La regola per gli aggiornamenti
-          &egrave; una sola: <strong>sostituire l'exe sul posto, mai spostarlo</strong>.</li>
+          <strong>dati</strong> che sta <em>dentro</em> la cartella Gestionale: se la
+          versione nuova &egrave; finita altrove, l&igrave; ha creato un archivio nuovo e
+          vuoto. Rimetti tutto <strong>nella cartella di prima</strong> e i tuoi dati
+          tornano.</li>
         <li><strong>Premo "Apri WhatsApp" e non si apre niente.</strong> Vuol dire che
           il programma di WhatsApp non &egrave; installato su questo computer. Sulla
           stessa pagina, sotto il pulsante, c'&egrave; scritto <em>"usa WhatsApp
@@ -591,11 +612,21 @@ def main() -> None:
     out = RADICE / "GUIDA.html"
     out.write_text(HTML, encoding="utf-8")
     print(f"{out}  ({len(HTML) // 1024} KB)")
-    # Copia accanto all'exe, dove l'utente la trova senza cercarla.
-    dist = RADICE / "dist"
-    if dist.is_dir():
-        (dist / "GUIDA.html").write_text(HTML, encoding="utf-8")
-        print(dist / "GUIDA.html")
+    # Copia dentro la cartella del programma, dove l'utente la trova senza
+    # cercarla. Da quando il pacchetto e' una cartella e non un file unico, la
+    # destinazione e' dist/Gestionale/ e non piu' dist/: mettercela accanto
+    # invece che dentro vorrebbe dire consegnarla separata, e chi copia la
+    # cartella la lascerebbe indietro.
+    programma = RADICE / "dist" / "Gestionale"
+    if programma.is_dir():
+        (programma / "GUIDA.html").write_text(HTML, encoding="utf-8")
+        print(programma / "GUIDA.html")
+        # Stessa ragione per il creatore del collegamento: deve viaggiare
+        # insieme al programma, e cerca Gestionale.exe nella propria cartella.
+        bat = RADICE / "crea_collegamento.bat"
+        if bat.is_file():
+            shutil.copy2(bat, programma / bat.name)
+            print(programma / bat.name)
 
 
 if __name__ == "__main__":

@@ -22,7 +22,8 @@ from app.numerazione import verifica_continuita
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
 from app.validazioni import (
-    normalizza_tipo_spesa_ts, valida_importi_riga, valida_tipo_spesa_ts,
+    normalizza_tipo_spesa_ts, valida_importi_riga, valida_percentuale,
+    valida_tipo_spesa_ts,
 )
 
 router = APIRouter()
@@ -252,6 +253,19 @@ async def crea(request: Request):
         ritenuta_applicata = bool(form.get("ritenuta_applicata"))
         if ritenuta_applicata and cliente is not None and not cliente["sostituto_imposta"]:
             errori.append("La ritenuta d'acconto e' ammessa solo per clienti sostituto d'imposta.")
+
+        # Le percentuali fuori dalle righe passavano dritte a q2(): un valore
+        # scritto male usciva come pagina di errore invece che come correzione da
+        # fare nel modulo.
+        errori += valida_percentuale(
+            form.get("sconto_cliente_pct") or "0", "Sconto cliente")
+        errori += valida_percentuale(
+            form.get("ritenuta_pct") or "0", "Ritenuta d'acconto")
+        # L'ENPAV non si scrive qui: viene dalle Impostazioni, e se e' rovinato lo
+        # e' per tutte le fatture. Il messaggio deve mandare dove si corregge, non
+        # far cercare l'errore in questa pagina.
+        for e in valida_percentuale(studio.get("enpav_pct") or "2", "Contributo ENPAV"):
+            errori.append(e + " Si corregge in Impostazioni.")
 
         if errori:
             return templates.TemplateResponse(

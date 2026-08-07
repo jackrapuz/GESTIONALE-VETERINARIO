@@ -21,10 +21,32 @@ def _client():
     return TestClient(m.app)
 
 
+def _spec() -> str:
+    return (Path(__file__).resolve().parent.parent
+            / "Gestionale.spec").read_text(encoding="utf-8")
+
+
 def test_lo_spec_non_apre_la_finestra_del_terminale():
-    from pathlib import Path
-    spec = (Path(__file__).resolve().parent.parent / "Gestionale.spec").read_text(encoding="utf-8")
-    assert "console=False" in spec
+    assert "console=False" in _spec()
+
+
+def test_il_pacchetto_e_una_cartella_non_un_file_unico():
+    """**Non tornare al file unico.**
+
+    Un eseguibile onefile porta l'archivio dentro di se' e a ogni avvio lo
+    scompatta in ``%TEMP%\\_MEIxxxxx``, per cancellarlo alla chiusura. Quando la
+    cancellazione non riesce — un antivirus che tiene aperto un file, una
+    chiusura forzata — la cartella resta: ne sono state trovate **21 abbandonate
+    per 290 MB**, e ogni tanto usciva l'errore "impossibile eliminare un file
+    temporaneo". Su un computer senza nessuno a guardarlo, quella roba cresce.
+
+    Con la cartella non c'e' niente da scompattare: il difetto sparisce alla
+    radice, l'avvio e' piu' rapido di circa 400 ms e l'eseguibile non resta
+    bloccato dopo la chiusura.
+    """
+    spec = _spec()
+    assert "COLLECT(" in spec, "senza COLLECT il pacchetto torna a essere un file unico"
+    assert "exclude_binaries=True" in spec
 
 
 def test_salute_permette_di_riconoscere_un_istanza_gia_avviata():

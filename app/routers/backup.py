@@ -57,7 +57,12 @@ async def ripristina_upload(request: Request):
     if file is None or not getattr(file, "filename", ""):
         return RedirectResponse("/backup?msg=Nessun+file+selezionato", status_code=303)
     contenuto = await file.read()
-    tmp = Path(tempfile.gettempdir()) / f"ripristino_{file.filename}"
+    # **Solo il nome, mai il percorso.** ``file.filename`` arriva dal browser e
+    # puo' contenere separatori: un nome come "..\\..\\qualcosa" farebbe scrivere
+    # il file fuori dalla cartella temporanea. Qui l'unico che carica e' la
+    # dottoressa dal proprio computer, quindi non e' un attacco - e' che un nome
+    # storto non deve poter scrivere dove gli pare.
+    tmp = Path(tempfile.gettempdir()) / f"ripristino_{Path(file.filename).name}"
     tmp.write_bytes(contenuto)
     try:
         sicurezza = bkp.ripristina_da_file(tmp)

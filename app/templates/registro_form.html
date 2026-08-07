@@ -38,17 +38,22 @@
       <input name="descrizione" id="descrizione" value="{{ dati.descrizione or '' }}"
              placeholder="Descrizione prestazione">
       <input type="hidden" name="prestazione_id" id="prestazione_id" value="{{ dati.prestazione_id or '' }}"></div>
+    {# **Non `type="number"`.** Un prezzo scritto all'italiana ("45,50") e' un
+       valore invalido per un campo numerico: il campo si svuota da solo e al
+       server arriva stringa vuota, cioe' zero, senza un errore. Stesso motivo e
+       stessa scelta delle righe di fattura (vedi fattura_nuova.html);
+       `inputmode="decimal"` tiene il tastierino sul tablet. #}
     <div class="campo"><label>Q.tà</label>
-      <input type="number" step="0.01" name="quantita" value="{{ dati.quantita or '1' }}"></div>
+      <input type="text" inputmode="decimal" name="quantita" value="{{ dati.quantita or '1' }}"></div>
   </div>
 
   <div class="riga">
     <div class="campo"><label>Prezzo €</label>
-      <input type="number" step="0.01" name="prezzo_unitario" id="prezzo_unitario" value="{{ dati.prezzo_unitario or '0.00' }}"></div>
+      <input type="text" inputmode="decimal" name="prezzo_unitario" id="prezzo_unitario" value="{{ dati.prezzo_unitario or '0,00' }}"></div>
     <div class="campo"><label>Sconto %</label>
-      <input type="number" step="0.01" name="sconto_riga_pct" value="{{ dati.sconto_riga_pct or '0' }}"></div>
+      <input type="text" inputmode="decimal" name="sconto_riga_pct" value="{{ dati.sconto_riga_pct or '0' }}"></div>
     <div class="campo"><label>IVA %</label>
-      <input type="number" step="0.01" name="aliquota_iva" id="aliquota_iva" value="{{ dati.aliquota_iva or '22' }}"></div>
+      <input type="text" inputmode="decimal" name="aliquota_iva" id="aliquota_iva" value="{{ dati.aliquota_iva or '22' }}"></div>
     {# Elenco chiuso (vedi listino_form.html): il valore finisce nello snapshot
        immutabile della riga di fattura, quindi non puo' essere testo libero. #}
     <div class="campo"><label>Sp. TS</label>

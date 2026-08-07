@@ -1,4 +1,6 @@
 """Test dell'invio via WhatsApp (numero, link, preparazione del PDF)."""
+import time
+
 import pytest
 
 from app import invio as mod
@@ -170,6 +172,31 @@ def test_il_pdf_si_prende_anche_senza_appunti(tmp_path):
     assert "graffetta" in html  # e la terza via resta spiegata
 
 
+def _appunti_di_windows_funzionano() -> bool:
+    """Gli appunti di Windows sono **una risorsa condivisa di tutto il computer**.
+
+    Un qualunque altro programma puo' tenerli aperti, e allora falliscono per
+    chiunque: e' successo davvero durante una sessione di lavoro, con
+    ``Set-Clipboard`` che non riusciva nemmeno da PowerShell a mano.
+
+    Senza questo controllo il test cadeva in quei momenti, dando la colpa al
+    gestionale per qualcosa che non aveva fatto. Un test che diventa rosso a caso
+    e' peggio di un test che manca: insegna a ignorare i test rossi, e da li' in
+    poi copre anche i guasti veri.
+    """
+    import subprocess
+
+    for _ in range(3):        # i blocchi sugli appunti di solito durano un attimo
+        esito = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-STA", "-Command",
+             "Set-Clipboard -Value 'prova'"],
+            capture_output=True, timeout=30)
+        if esito.returncode == 0:
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def test_copia_negli_appunti_mette_davvero_il_file(tmp_path):
     """Test di integrazione con gli appunti di Windows (salta altrove)."""
     import subprocess
@@ -177,6 +204,10 @@ def test_copia_negli_appunti_mette_davvero_il_file(tmp_path):
 
     if sys.platform != "win32":
         pytest.skip("appunti Windows")
+    if not _appunti_di_windows_funzionano():
+        pytest.skip("gli appunti di Windows sono occupati da un altro programma: "
+                    "non e' un difetto del gestionale")
+
     f = tmp_path / "documento di prova.pdf"
     f.write_bytes(b"%PDF")
     assert mod.copia_negli_appunti(f) is True

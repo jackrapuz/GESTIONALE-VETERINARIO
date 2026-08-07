@@ -118,6 +118,30 @@ def valida_tipo_spesa_ts(tipo: str) -> list[str]:
 ALIQUOTA_IVA_MASSIMA = 100
 
 
+def valida_percentuale(testo, etichetta: str, massimo: int = 100) -> list[str]:
+    """Controlla una percentuale scritta a mano, prima che finisca nel database.
+
+    Serve dove il valore viene **salvato come testo** e riletto molto piu' tardi:
+    le percentuali delle Impostazioni (ENPAV, IVA predefinita) sono il caso
+    peggiore, perche' passano per ``q2()`` a **ogni** emissione di fattura. Un
+    carattere sbagliato salvato li' non da' nessun segnale al momento, e poi
+    blocca la fatturazione con un errore che non spiega niente — e chi legge non
+    ha modo di collegare la cosa a un campo toccato settimane prima.
+    """
+    from app.calcolo import ValoreNonNumerico, dec
+
+    testo = str(testo or "").strip()
+    if not testo:
+        return [f"{etichetta}: manca il valore."]
+    try:
+        valore = dec(testo)
+    except ValoreNonNumerico:
+        return [f"{etichetta}: «{testo}» non è un numero."]
+    if valore < 0 or valore > massimo:
+        return [f"{etichetta} non valida: {valore}%. Dev'essere fra 0 e {massimo}."]
+    return []
+
+
 def valida_importi_riga(descrizione: str, quantita, prezzo, sconto_pct,
                         aliquota) -> list[str]:
     """Controlla che gli importi di una riga siano possibili, non solo numerici."""
