@@ -37,6 +37,10 @@
 
   <footer class="footer">
     {{ ui.ferro() }} Dati salvati solo su questo computer · nessuna connessione a Internet
+    {# La versione serve a dire al telefono quale programma si ha davanti: gli
+       eseguibili si sostituiscono a mano, quindi due cartelle identiche possono
+       contenere versioni diverse. Selezionabile col mouse, per poterla dettare. #}
+    <div class="versione">versione {{ VERSIONE }}</div>
     {# Senza finestra del terminale, questo e' il modo per chiudere il gestionale. #}
     <form method="post" action="/spegni" class="spegni"
           onsubmit="return confirm('Chiudere il gestionale?\n\nI dati sono già salvati.');">

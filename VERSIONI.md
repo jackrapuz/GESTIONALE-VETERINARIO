@@ -12,6 +12,20 @@ locale ed è la sola copia. **Non svuotarla.**
 | 2026-08-05 | `v2026.08.05-pdf-whatsapp` | `gestionale_2026-08-05_pdf-whatsapp.zip` | Il PDF si trascina nella chat, si scarica e si vede in anteprima |
 | 2026-08-06 | `v2026.08.06-export` | `gestionale_2026-08-06_export.zip` | Export commercialista con importi sommabili; modello dati Sistema TS; tipo spesa vincolato a FV/SV/AA |
 
+## Quale versione sta girando
+
+In fondo a ogni pagina del gestionale, sotto il pulsante di chiusura: **versione
+2026.08.07**. È la domanda da fare al telefono quando qualcosa non torna, prima
+di qualsiasi altra: la stessa cartella può contenere programmi diversi, perché
+l'aggiornamento è una copia di file fatta a mano.
+
+Da programma risponde anche `http://127.0.0.1:8420/salute`, quarta riga.
+
+Il numero sta in `app/versione.py`, in un posto solo. **Va alzato a mano a ogni
+consegna**, insieme al tag e alla riga nella tabella qui sopra — se resta
+indietro, il gestionale dichiara una versione che non è la sua, che è peggio del
+non dire niente.
+
 ## Aggiornare
 
 1. Chiudere il gestionale dal pulsante **Chiudi il gestionale** in fondo alla

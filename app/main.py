@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.db import DATI_DIR, get_conn, init_db
 from app.templating import templates
+from app.versione import VERSIONE
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -190,16 +191,24 @@ def create_app() -> FastAPI:
     def salute():
         """Carta d'identita' dell'istanza, per chi prova ad avviarne una seconda.
 
-        Tre righe: il nome del programma, **quale cartella dati sta servendo** e
-        quante pagine ha aperte.
+        Quattro righe: il nome del programma, **quale cartella dati sta servendo**,
+        quante pagine ha aperte e **quale versione e'**.
 
         La cartella e' la parte importante. Prima c'era solo il nome, e un secondo
         avvio si accontentava di quello: con un server di sviluppo acceso sulla
         radice del progetto e l'exe sui propri dati, il doppio clic ti portava
         sull'archivio sbagliato senza dire niente. Per un gestionale di fatture
         e' il difetto peggiore possibile.
+
+        **Le righe nuove si aggiungono in fondo, mai in mezzo.** Chi legge questa
+        risposta lo fa per posizione (``_stessa_installazione``,
+        ``_pagine_da_salute``), e chi legge puo' essere un eseguibile *di un'altra
+        versione*: si sostituisce solo il binario, quindi capita che un exe vecchio
+        interroghi un exe nuovo o viceversa. In fondo, la riga in piu' viene
+        semplicemente ignorata da chi non la conosce; in mezzo, sposterebbe le
+        altre e il vecchio leggerebbe la cartella dati sbagliata.
         """
-        return f"gestionale-veterinario\n{DATI_DIR}\n{pagine_aperte()}"
+        return f"gestionale-veterinario\n{DATI_DIR}\n{pagine_aperte()}\n{VERSIONE}"
 
     @app.get("/presenza")
     async def presenza(request: Request):

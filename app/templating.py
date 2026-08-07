@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi.templating import Jinja2Templates
 
 from app.validazioni import TIPI_SPESA_TS
+from app.versione import VERSIONE
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -54,3 +55,7 @@ templates.env.filters["si_no"] = si_no
 # un elenco chiuso di legge: come globale evitano di essere passati a mano da ogni
 # router, e soprattutto evitano che qualcuno ne riscriva a mano una copia.
 templates.env.globals["TIPI_SPESA_TS"] = TIPI_SPESA_TS
+
+# La versione compare nel piede di ogni pagina (base.html): come globale non va
+# passata da ogni router, e quindi non c'e' una pagina che se la dimentica.
+templates.env.globals["VERSIONE"] = VERSIONE

@@ -76,6 +76,59 @@ def test_le_pagine_aperte_si_leggono_da_salute():
     assert m._pagine_da_salute("gestionale-veterinario\nC:\\dati\nboh") == 0
 
 
+# --- quale versione sta girando ---------------------------------------------
+
+def test_salute_dice_la_versione():
+    """Gli exe si sostituiscono copiando un file: senza questa riga, due cartelle
+    identiche possono contenere programmi diversi e non c'e' modo di saperlo se
+    non confrontando l'hash del binario."""
+    from app.versione import VERSIONE
+    righe = _client().get("/salute").text.splitlines()
+    assert righe[3] == VERSIONE
+
+
+def test_la_versione_sta_in_fondo_a_salute():
+    """**Le righe nuove vanno aggiunte in fondo, mai in mezzo.**
+
+    Chi legge ``/salute`` lo fa per posizione, e puo' essere un eseguibile di
+    un'altra versione: si sostituisce solo il binario, quindi un exe vecchio
+    puo' interrogarne uno nuovo. Una riga infilata in mezzo sposterebbe la
+    cartella dati, e il vecchio si attaccherebbe all'archivio sbagliato — che e'
+    esattamente il difetto gia' pagato con tre giorni di indagine.
+
+    Le prime tre righe restano quelle di prima: e' questo che il test difende.
+    """
+    from app.versione import VERSIONE
+    righe = _client().get("/salute").text.splitlines()
+    assert righe[0].startswith("gestionale")
+    assert Path(righe[1]).resolve() == m.DATI_DIR.resolve()
+    assert righe[2].isdigit()
+    assert righe[-1] == VERSIONE, "la versione deve essere l'ultima riga"
+
+
+def test_una_risposta_di_una_versione_futura_resta_leggibile():
+    """L'altro verso della compatibilita': se un domani ``/salute`` guadagnasse
+    altre righe, il codice di oggi deve continuare a leggere le sue."""
+    futura = f"gestionale-veterinario\n{m.DATI_DIR}\n2\n2027.01.01\nchissa-che-altro"
+    assert m._stessa_installazione(futura) is True
+    assert m._pagine_da_salute(futura) == 2
+
+
+def test_la_versione_ha_il_formato_di_una_data():
+    """``AAAA.MM.GG``, come i tag in VERSIONI.md: se qualcuno scrive '2026.8.7'
+    o 'v2026.08.07' le versioni non si ordinano piu' guardandole."""
+    import re
+    from app.versione import VERSIONE
+    assert re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", VERSIONE), VERSIONE
+
+
+def test_la_versione_compare_nel_piede_delle_pagine():
+    """Al telefono si chiede "cosa c'e' scritto in fondo", non si calcola un hash."""
+    from app.versione import VERSIONE
+    testo = _client().get("/").text
+    assert f"versione {VERSIONE}" in testo
+
+
 def test_portare_in_primo_piano_non_esplode_se_non_trova_nulla():
     """Best effort: se la finestra non c'e', deve dire False, non sollevare —
     altrimenti il doppio clic finirebbe in un errore invece di aprire il browser."""
