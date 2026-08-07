@@ -15,7 +15,7 @@ separati.
 ## 1. Requisiti
 
 - **Windows 10/11**.
-- Nessun requisito se usi l'eseguibile `Gestionale.exe`.
+- Nessun requisito se usi la cartella `Gestionale` già costruita.
 - Solo per l'avvio da sorgente o per creare l'exe: **Python 3.12** installato
   (con l'opzione "Add Python to PATH").
 
@@ -32,8 +32,13 @@ separati.
 ### Vive quanto vive la finestra del browser
 Senza console, chiudere il browser lasciava il server vivo e **invisibile**: nessun
 segno che fosse acceso e nessun modo di fermarlo se non il Gestione attività (con
-l'effetto collaterale che il file `Gestionale.exe` resta bloccato e non si può
+l'effetto collaterale che `Gestionale.exe` resta bloccato e non si può
 sostituire con un nuovo build).
+
+Chiudendo la finestra il programma si spegne in **meno di un secondo** (misurato:
+0,81 s). La grazia era di 30 secondi e serviva a coprire il buco fra una pagina e
+l'altra; ora quel buco è coperto meglio da un contatore delle richieste in corso,
+che evita di spegnersi mentre si sta generando una pagina lenta.
 
 Il primo tentativo era un **battito a timer** dalla pagina. Sbagliato: il gestionale
 si tiene aperto tutto il giorno mentre si lavora ad altro, e così la vita del
@@ -320,33 +325,30 @@ Consiglio: fai un backup periodico e conservane una copia fuori dal PC.
 
 ## 10. Creare l'eseguibile (per chi sviluppa)
 
-Con Python 3.12: doppio clic su **`costruisci_exe.bat`**. Al termine trovi
-`dist\Gestionale.exe`. Copialo dove vuoi: al primo avvio creerà accanto a sé la
+Con Python 3.12: doppio clic su **`costruisci_exe.bat`**. Al termine trovi la
+**cartella** `dist\Gestionale\`. Si consegna intera: `Gestionale.exe` da solo non
+parte, gli serve `_internal\` accanto. Al primo avvio crea al proprio interno la
 cartella `dati`.
 
-**Se il build fallisce con `PermissionError: [WinError 5]` su `dist\Gestionale.exe`**,
-il file è in uso. Due cause, in ordine di frequenza:
+**Perché una cartella e non più un file unico.** L'eseguibile onefile portava
+l'archivio dentro di sé e a ogni avvio lo scompattava in `%TEMP%\_MEIxxxxx`, per
+cancellarlo alla chiusura. Quando la cancellazione non riusciva — un antivirus
+che teneva aperto un file, una chiusura forzata — la cartella restava: ne sono
+state trovate **21 abbandonate per 290 MB**, con l'errore *"impossibile eliminare
+un file temporaneo"* ogni tanto in faccia all'utente. Con la cartella non c'è
+niente da scompattare. In più l'avvio scende da 4,75 s a 3,8 s (misurato).
 
-1. **Il gestionale è in esecuzione.** Non serve il Gestione attività: chiudilo dal
-   pulsante *"Chiudi il gestionale"*, oppure con `POST /spegni` sulla porta su cui
-   ascolta (`Get-NetTCPConnection -State Listen -OwningProcess <pid>` per trovarla).
-2. **È appena stato chiuso**, ma il **bootloader onefile** di PyInstaller è ancora
-   lì a ripulire la propria cartella temporanea, e in quel tempo il file resta
-   bloccato. Di solito esce in mezzo minuto, ma è stato visto restare **oltre
-   quattro minuti**. Riconoscerlo è facile e permette di chiuderlo senza dubbi:
+Procedura di aggiornamento e di ritorno indietro: vedi **`VERSIONI.md`**.
 
-   ```powershell
-   Get-Process -Name Gestionale | ForEach-Object {
-     $py = $_.Modules | Where-Object { $_.ModuleName -like "python*.dll" }
-     $porte = (Get-NetTCPConnection -State Listen -OwningProcess $_.Id -ErrorAction SilentlyContinue).LocalPort
-     "PID $($_.Id) | python: $(if($py){'SI'}else{'no'}) | porte: $porte"
-   }
-   ```
+**Se il build fallisce con `PermissionError: [WinError 5]`**, il gestionale è in
+esecuzione: chiudilo dal pulsante *"Chiudi il gestionale"*, oppure con
+`POST /spegni` sulla porta su cui ascolta
+(`Get-NetTCPConnection -State Listen -OwningProcess <pid>` per trovarla).
 
-   **Nessun `python*.dll` caricato e nessuna porta in ascolto** = l'applicazione è
-   già uscita e quello è solo il bootloader: `Stop-Process -Name Gestionale -Force`
-   è sicuro, non c'è niente da salvare. Se invece ha Python caricato e una porta,
-   è il gestionale vero e va chiuso con `/spegni`.
+Con il pacchetto a cartella è sparita la seconda causa storica di questo errore:
+il bootloader onefile che restava a ripulire la propria cartella temporanea
+tenendo bloccato il file — a volte **per oltre quattro minuti**. Non c'è più
+niente da ripulire, quindi il processo esce subito.
 
 ## 11. Note fiscali
 

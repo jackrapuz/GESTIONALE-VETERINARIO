@@ -20,18 +20,44 @@ sui float: il denaro non passa mai per ``float``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 CENT = Decimal("0.01")
 
 
+class ValoreNonNumerico(ValueError):
+    """Quel che e' stato scritto in un campo importo non e' un numero."""
+
+
 def dec(valore) -> Decimal:
-    """Converte in Decimal in modo sicuro (via str per evitare imprecisioni float)."""
+    """Converte in Decimal in modo sicuro (via str per evitare imprecisioni float).
+
+    Accetta le due notazioni che entrano davvero in questo programma:
+
+    - quella **del database**, con il punto decimale (``"45.00"``);
+    - quella **italiana**, che e' come si scrive un prezzo a mano — virgola
+      decimale, e punto per le migliaia (``"1.234,56"``).
+
+    Si distinguono guardando se compaiono entrambi i segni: se c'e' anche la
+    virgola, allora il punto e' un separatore di migliaia e va tolto. Prima
+    ``"1.234,56"`` sollevava ``decimal.InvalidOperation`` e la pagina moriva con
+    un errore di sistema, per un prezzo scritto nel modo piu' naturale possibile.
+
+    Su un valore che numero non e' solleva :class:`ValoreNonNumerico`, non zero:
+    un importo che sparisce in silenzio e' il difetto che ha gia' prodotto una
+    fattura da 0,00 euro senza che nessuno se ne accorgesse.
+    """
     if isinstance(valore, Decimal):
         return valore
     if valore is None or valore == "":
         return Decimal("0")
-    return Decimal(str(valore).replace(",", "."))
+    testo = str(valore).strip()
+    if "," in testo:
+        testo = testo.replace(".", "").replace(",", ".")
+    try:
+        return Decimal(testo)
+    except InvalidOperation:
+        raise ValoreNonNumerico(f"«{valore}» non è un numero.") from None
 
 
 def q2(valore) -> Decimal:

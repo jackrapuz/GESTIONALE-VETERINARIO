@@ -12,19 +12,35 @@ from urllib.parse import quote_plus
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from app.calcolo import RigaInput, dec, q2
+from app.calcolo import RigaInput, ValoreNonNumerico, dec, q2
 from app.db import get_conn
 from app.fatturazione import (
     denominazione_cliente, emetti_fattura, gruppi_iva_da_righe, leggi_fattura,
 )
 from app.invio import TelefonoMancante, prepara_invio_whatsapp
 from app.numerazione import verifica_continuita
-from app.pdf_fattura import genera_pdf_fattura
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
-from app.validazioni import normalizza_tipo_spesa_ts, valida_tipo_spesa_ts
+from app.validazioni import (
+    normalizza_tipo_spesa_ts, valida_importi_riga, valida_percentuale,
+    valida_tipo_spesa_ts,
+)
 
 router = APIRouter()
+
+
+def genera_pdf_fattura(*a, **k):
+    """Ponte pigro verso :mod:`app.pdf_fattura`.
+
+    **reportlab non va importato all'avvio.** Serve solo quando si stampa o si
+    manda un documento, ma importarlo in cima a questo file lo caricava a ogni
+    apertura del gestionale — e il gestionale si apre molte piu' volte di quante
+    fatture si stampino. Il costo si paga alla prima stampa, una volta per
+    sessione: Python tiene in cache i moduli gia' importati, quindi dalla seconda
+    in poi questa funzione e' una ricerca in un dizionario.
+    """
+    from app.pdf_fattura import genera_pdf_fattura as _vero
+    return _vero(*a, **k)
 
 MODALITA_PAGAMENTO = ["Bonifico", "Contanti", "Carta", "Assegno", "POS", "Altro"]
 
@@ -213,7 +229,13 @@ async def crea(request: Request):
                 errori.append("Cliente non trovato.")
 
         data_emissione = str(form.get("data_emissione", "")).strip() or date.today().isoformat()
-        righe = _righe_da_form(form, _nomi_pazienti(conn))
+        # Un importo scritto male e' un errore di chi compila, non un guasto del
+        # programma: va detto nel modulo, non in una pagina di errore di sistema.
+        try:
+            righe = _righe_da_form(form, _nomi_pazienti(conn))
+        except ValoreNonNumerico as e:
+            righe = []
+            errori.append(f"Importo non valido: {e}")
         if not righe:
             errori.append("Inserire almeno una riga con importo.")
         # Ultimo controllo prima dello snapshot immutabile: da qui in poi il tipo
@@ -221,10 +243,29 @@ async def crea(request: Request):
         # documento non trasmissibile al Sistema TS senza dare alcun segnale.
         for errore in {e for r in righe for e in valida_tipo_spesa_ts(r.tipo_spesa_ts)}:
             errori.append(errore)
+        # Stesso motivo, sugli importi: un'aliquota impossibile o una quantita' a
+        # zero producono un documento sbagliato che poi non si cancella.
+        for r in righe:
+            errori += valida_importi_riga(
+                r.descrizione, r.quantita, r.prezzo_unitario,
+                r.sconto_riga_pct, r.aliquota_iva)
 
         ritenuta_applicata = bool(form.get("ritenuta_applicata"))
         if ritenuta_applicata and cliente is not None and not cliente["sostituto_imposta"]:
             errori.append("La ritenuta d'acconto e' ammessa solo per clienti sostituto d'imposta.")
+
+        # Le percentuali fuori dalle righe passavano dritte a q2(): un valore
+        # scritto male usciva come pagina di errore invece che come correzione da
+        # fare nel modulo.
+        errori += valida_percentuale(
+            form.get("sconto_cliente_pct") or "0", "Sconto cliente")
+        errori += valida_percentuale(
+            form.get("ritenuta_pct") or "0", "Ritenuta d'acconto")
+        # L'ENPAV non si scrive qui: viene dalle Impostazioni, e se e' rovinato lo
+        # e' per tutte le fatture. Il messaggio deve mandare dove si corregge, non
+        # far cercare l'errore in questa pagina.
+        for e in valida_percentuale(studio.get("enpav_pct") or "2", "Contributo ENPAV"):
+            errori.append(e + " Si corregge in Impostazioni.")
 
         if errori:
             return templates.TemplateResponse(

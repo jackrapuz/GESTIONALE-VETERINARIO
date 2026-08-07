@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import socket
+import sqlite3
 import sys
 import threading
 import time
+import traceback
 import webbrowser
 from datetime import date
 from decimal import Decimal
@@ -23,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.db import DATI_DIR, get_conn, init_db
 from app.templating import templates
+from app.versione import VERSIONE
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -43,8 +46,21 @@ BASE_DIR = Path(__file__).resolve().parent
 # vive, senza limiti di tempo e senza chiedere niente al JavaScript. Quando la
 # finestra si chiude, il sistema operativo chiude la connessione e il server se
 # ne accorge da se'.
-GRAZIA_SECONDI = 30.0        # zero pagine tollerato prima di spegnersi
-INTERVALLO_CONTROLLO = 5.0   # ogni quanto il guardiano ricontrolla
+# **Chiudere la finestra deve spegnere il programma subito**, come ci si aspetta
+# da una pagina qualsiasi. La grazia era di 30 secondi, e serviva a coprire il
+# buco fra una pagina e l'altra: mentre si passa da /clienti a /fatture il
+# vecchio flusso e' gia' chiuso e il nuovo non e' ancora partito, e un guardiano
+# impaziente spegnerebbe il gestionale in mezzo a una navigazione.
+#
+# Trenta secondi erano pero' una misura grossolana per un problema piccolo. Il
+# buco vero dura quanto ci mette il browser a chiedere la pagina nuova, cioe'
+# niente; quello che dura davvero e' la *generazione* di una pagina lenta (un
+# PDF, uno zip di export), e quella si riconosce meglio contando le richieste in
+# corso che allungando un timer. Con il contatore, la grazia puo' scendere a un
+# secondo e mezzo senza rischiare nulla: chi sta ancora servendo una richiesta
+# non si spegne comunque, per quanto ci metta.
+GRAZIA_SECONDI = 1.5         # zero pagine tollerato prima di spegnersi
+INTERVALLO_CONTROLLO = 0.3   # ogni quanto il guardiano ricontrolla
 INTERVALLO_KEEPALIVE = 15.0  # ogni quanto il flusso manda un segno di vita
 
 # Pagine attualmente collegate. Il contatore viene toccato dal loop asincrono
@@ -52,6 +68,12 @@ INTERVALLO_KEEPALIVE = 15.0  # ogni quanto il flusso manda un segno di vita
 # di ragionare su cosa sia atomico e cosa no.
 _pagine_aperte = 0
 _lucchetto = threading.Lock()
+
+# Richieste attualmente in lavorazione. Senza questo, una grazia corta uccide il
+# gestionale *mentre* sta generando una pagina lenta: la vita veniva segnata
+# all'inizio della richiesta, quindi un PDF da tre secondi con grazia di uno e
+# mezzo si spegneva da solo a meta' strada.
+_richieste_in_corso = 0
 
 # Ultima richiesta ricevuta, orologio monotono (immune ai cambi di ora). E' il
 # secondo segnale: copre la pagina vecchia rimasta in cache, senza il flusso.
@@ -62,6 +84,45 @@ def segna_vita() -> None:
     """Registra che qualcuno sta usando il programma proprio adesso."""
     global _ultima_vita
     _ultima_vita = time.monotonic()
+
+
+class StaticiConCache(StaticFiles):
+    """File statici che il browser puo' tenersi, invece di richiederli ogni volta.
+
+    Senza intestazione ``Cache-Control`` il browser ha ETag e data di modifica,
+    quindi non riscarica il contenuto — ma **chiede lo stesso**, a ogni cambio di
+    pagina, per sentirsi dire "non e' cambiato". Sono due richieste in piu' per
+    ogni clic (foglio di stile e icona) che non servono a niente.
+
+    Dire "tienilo per un anno" e' sicuro solo perche' gli indirizzi portano
+    ``?v=`` con la versione del programma (vedi ``templates/base.html``):
+    all'aggiornamento l'indirizzo cambia e il browser riscarica da se'. Senza quel
+    pezzo, dopo un aggiornamento resterebbe attaccato al foglio di stile vecchio
+    e nessuno capirebbe perche'.
+    """
+
+    def file_response(self, *args, **kwargs):
+        risposta = super().file_response(*args, **kwargs)
+        risposta.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return risposta
+
+
+def _entra_richiesta() -> None:
+    global _richieste_in_corso
+    with _lucchetto:
+        _richieste_in_corso += 1
+
+
+def _esce_richiesta() -> None:
+    global _richieste_in_corso
+    with _lucchetto:
+        _richieste_in_corso = max(0, _richieste_in_corso - 1)
+
+
+def richieste_in_corso() -> int:
+    """Quante richieste il gestionale sta servendo in questo momento."""
+    with _lucchetto:
+        return _richieste_in_corso
 
 
 def _entra_pagina() -> int:
@@ -98,6 +159,12 @@ def _guardiano(server: uvicorn.Server) -> None:
     while not server.should_exit:
         time.sleep(INTERVALLO_CONTROLLO)
         if pagine_aperte() > 0:
+            continue
+        # Nessuna pagina, ma una richiesta ancora in lavorazione: e' il caso di
+        # chi ha appena premuto "Emetti fattura" e sta aspettando il PDF. La
+        # pagina vecchia se n'e' andata, quella nuova non c'e' ancora, e
+        # spegnersi adesso vorrebbe dire perdere il lavoro a meta'.
+        if richieste_in_corso() > 0:
             continue
         if time.monotonic() - _ultima_vita > GRAZIA_SECONDI:
             print("Nessuna pagina aperta: il gestionale si spegne.")
@@ -151,7 +218,8 @@ def create_app() -> FastAPI:
     init_db()
 
     app = FastAPI(title="Gestionale Fatturazione", docs_url=None, redoc_url=None)
-    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+    app.mount("/static", StaticiConCache(directory=str(BASE_DIR / "static")),
+              name="static")
 
     @app.middleware("http")
     async def tieni_in_vita(request: Request, call_next):
@@ -160,9 +228,21 @@ def create_app() -> FastAPI:
         E' il secondo segnale, accanto al flusso di presenza: cosi' il programma
         non si spegne mentre lo si sta usando anche se il flusso non ci fosse
         (JavaScript disattivato, pagina vecchia rimasta in cache).
+
+        La vita si segna **due volte, prima e dopo**, e non e' una ripetizione
+        inutile: con la grazia scesa a un secondo e mezzo, segnarla solo
+        all'inizio farebbe scadere il tempo *durante* una richiesta lunga. Il
+        contatore in mezzo copre proprio quel tratto, e il ``finally`` garantisce
+        che scenda anche se la richiesta finisce male — altrimenti un solo errore
+        basterebbe a rendere il gestionale inspegnibile.
         """
         segna_vita()
-        return await call_next(request)
+        _entra_richiesta()
+        try:
+            return await call_next(request)
+        finally:
+            _esce_richiesta()
+            segna_vita()
 
     # Router delle sezioni (registrati man mano che vengono implementati).
     from app.routers import (
@@ -190,16 +270,24 @@ def create_app() -> FastAPI:
     def salute():
         """Carta d'identita' dell'istanza, per chi prova ad avviarne una seconda.
 
-        Tre righe: il nome del programma, **quale cartella dati sta servendo** e
-        quante pagine ha aperte.
+        Quattro righe: il nome del programma, **quale cartella dati sta servendo**,
+        quante pagine ha aperte e **quale versione e'**.
 
         La cartella e' la parte importante. Prima c'era solo il nome, e un secondo
         avvio si accontentava di quello: con un server di sviluppo acceso sulla
         radice del progetto e l'exe sui propri dati, il doppio clic ti portava
         sull'archivio sbagliato senza dire niente. Per un gestionale di fatture
         e' il difetto peggiore possibile.
+
+        **Le righe nuove si aggiungono in fondo, mai in mezzo.** Chi legge questa
+        risposta lo fa per posizione (``_stessa_installazione``,
+        ``_pagine_da_salute``), e chi legge puo' essere un eseguibile *di un'altra
+        versione*: si sostituisce solo il binario, quindi capita che un exe vecchio
+        interroghi un exe nuovo o viceversa. In fondo, la riga in piu' viene
+        semplicemente ignorata da chi non la conosce; in mezzo, sposterebbe le
+        altre e il vecchio leggerebbe la cartella dati sbagliata.
         """
-        return f"gestionale-veterinario\n{DATI_DIR}\n{pagine_aperte()}"
+        return f"gestionale-veterinario\n{DATI_DIR}\n{pagine_aperte()}\n{VERSIONE}"
 
     @app.get("/presenza")
     async def presenza(request: Request):
@@ -266,6 +354,29 @@ def create_app() -> FastAPI:
              # un orfano rimasto in piedi per tre giorni sulla porta 8420,
              # invisibile e con codice vecchio. Meglio dire la verita'.
              "davvero_chiuso": _server is not None})
+
+    @app.exception_handler(sqlite3.IntegrityError)
+    def vincolo_del_database(request: Request, exc: sqlite3.IntegrityError):
+        """Rete di sicurezza: un vincolo del database non deve mai uscire grezzo.
+
+        I posti dove si puo' sbattere contro un vincolo sono controllati uno per
+        uno (vedi ``usi_che_impediscono_cancellazione`` in ``app/db.py``), e
+        quello e' il modo giusto: li' si sa *cosa* blocca l'operazione e lo si
+        puo' dire. Questa e' la rete sotto, per il legame che qualcuno
+        aggiungera' domani senza ricordarsi di controllarlo: meglio una frase
+        comprensibile che ``FOREIGN KEY constraint failed`` in mezzo a una
+        pagina di errore di sistema.
+
+        La traccia completa finisce comunque in ``dati/avvio.log``: serve a chi
+        deve capire, e non toglierla e' l'unico modo di accorgersi che un
+        controllo mancava.
+        """
+        traceback.print_exc()
+        return templates.TemplateResponse(
+            request, "vincolo.html",
+            {"titolo": "Operazione non possibile", "dettaglio": str(exc)},
+            status_code=409,
+        )
 
     return app
 

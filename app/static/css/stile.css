@@ -85,6 +85,8 @@ body {
   padding: 2.5rem 0 1.5rem;
 }
 .footer svg { width: 13px; height: 13px; vertical-align: -2px; opacity: .6; margin-right: .3rem; }
+/* Va letta solo quando la si cerca: piu' piccola e piu' chiara della riga sopra. */
+.footer .versione { margin-top: .35rem; font-size: .72rem; opacity: .7; }
 /* Chiusura del gestionale. Senza finestra del terminale e' l'unico modo di
    fermarlo, quindi deve saltare all'occhio: un pulsante vero, non un link. */
 .footer .spegni { margin-top: 1.1rem; }
@@ -203,8 +205,19 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ottone); ou
 
 /* ---- Emissione / dettaglio fattura ------------------------------------- */
 h2.sez { font-size: .82rem; color: var(--ottone-scuro); text-transform: uppercase; letter-spacing: .1em; margin: 1.4rem 0 .7rem; font-family: var(--sans); font-weight: 700; }
+/* **Le larghezze in percentuale valgono solo cosi'.** Con il layout automatico
+   la larghezza la decide il contenuto: il menu' Sp. TS e i menu' dei cavalli
+   reclamano il loro spazio, e a cedere sono le colonne numeriche, che si
+   riducono a pochi pixel. Il campo resta li' e accetta quel che scrivi, ma le
+   cifre non si vedono piu' — si finisce a digitare alla cieca dentro un valore
+   che c'era gia'. */
+table.righe-fattura { table-layout: fixed; }
+table.righe-fattura th, table.righe-fattura td { padding: .55rem .5rem; }
 table.righe-fattura input { padding: .35rem .45rem; }
 table.righe-fattura input.num { text-align: right; font-family: var(--mono); }
+/* Il menu' contiene sigle di due lettere: non ha motivo di prendersi tutta la
+   cella, e prendendosela toglierebbe spazio ai numeri. */
+table.righe-fattura select[name=r_tipo_spesa] { padding-left: .35rem; padding-right: .2rem; }
 table.righe-fattura td.imp-riga { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
 /* Togli una voce dal registro: discreto (e' accanto a ogni riga), ma con l'area
    cliccabile piena da 28px, perche' si usa anche col tablet in stalla. */

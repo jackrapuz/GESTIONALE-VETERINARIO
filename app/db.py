@@ -384,3 +384,53 @@ def init_db(db_path: Path | str | None = None) -> None:
                 _set_schema_version(conn, version + 1)
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Cancellare un'anagrafica: prima guardare a cosa e' ancora attaccata
+# ---------------------------------------------------------------------------
+# Cancellare un cliente che ha fatture emesse faceva saltare
+# ``sqlite3.IntegrityError: FOREIGN KEY constraint failed``, che arrivava
+# all'utente come una pagina di errore di sistema. Due cose sbagliate insieme:
+# non diceva **cosa** impediva la cancellazione, e sembrava un guasto del
+# programma invece di una regola sensata (le fatture emesse devono restare, per
+# legge, e restare intestate a qualcuno).
+#
+# I vincoli ci sono e vanno tenuti: il database ha ragione a rifiutare. Quello
+# che mancava e' guardarci dentro *prima*, per poterlo spiegare.
+LEGAMI: dict[str, list[tuple[str, str, str]]] = {
+    # anagrafica -> [(tabella che la usa, colonna, come chiamarla a chi legge)]
+    # I pazienti non compaiono fra i legami dei clienti: la loro chiave e'
+    # ON DELETE CASCADE, quindi se ne vanno insieme al proprietario.
+    "clienti": [
+        ("fatture", "cliente_id", "fatture"),
+        ("proforme", "cliente_id", "preventivi"),
+        ("prestazioni_eseguite", "cliente_id", "voci nel registro"),
+    ],
+    "pazienti": [
+        ("righe_fattura", "paziente_id", "righe di fattura"),
+        ("righe_proforma", "paziente_id", "righe di preventivo"),
+        ("prestazioni_eseguite", "paziente_id", "voci nel registro"),
+    ],
+    "prestazioni": [
+        ("righe_fattura", "prestazione_id", "righe di fattura"),
+        ("righe_proforma", "prestazione_id", "righe di preventivo"),
+        ("prestazioni_eseguite", "prestazione_id", "voci nel registro"),
+    ],
+}
+
+
+def usi_che_impediscono_cancellazione(conn, anagrafica: str, id_: int) -> list[str]:
+    """Descrive a cosa e' ancora attaccata questa riga (vuoto se si puo' togliere).
+
+    Restituisce frasi gia' pronte da mostrare, del tipo ``"3 fatture"``: il
+    numero serve, perche' "ha delle fatture" non dice se cercarne una o venti.
+    """
+    trovati: list[str] = []
+    for tabella, colonna, etichetta in LEGAMI.get(anagrafica, []):
+        n = conn.execute(
+            f"SELECT COUNT(*) FROM {tabella} WHERE {colonna}=?", (id_,)
+        ).fetchone()[0]
+        if n:
+            trovati.append(f"{n} {etichetta}")
+    return trovati

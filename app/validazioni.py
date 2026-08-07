@@ -102,3 +102,61 @@ def valida_tipo_spesa_ts(tipo: str) -> list[str]:
         return []
     ammessi = ", ".join(f"{k} ({v})" for k, v in TIPI_SPESA_TS.items())
     return [f"Tipo spesa Sistema TS non valido: sono ammessi solo {ammessi}."]
+
+
+# --- Importi di una riga di fattura -----------------------------------------
+# Aliquote IVA italiane in vigore. Non e' un elenco chiuso qui — una prestazione
+# esente o non imponibile puo' legittimamente avere 0 — ma serve a fermare i
+# valori impossibili PRIMA che finiscano nello snapshot immutabile.
+#
+# Perche' esiste questo controllo: e' stata emessa davvero una fattura con
+# aliquota **2222%** e totale zero. Il campo IVA era largo pochi pixel, il "22"
+# che conteneva non si vedeva, e digitandoci dentro e' diventato "2222". Il
+# server l'ha accettato senza una parola e ha prodotto un documento che per
+# legge non si cancella. Un numero non si giudica solo dal tipo: va guardato se
+# ha senso.
+ALIQUOTA_IVA_MASSIMA = 100
+
+
+def valida_percentuale(testo, etichetta: str, massimo: int = 100) -> list[str]:
+    """Controlla una percentuale scritta a mano, prima che finisca nel database.
+
+    Serve dove il valore viene **salvato come testo** e riletto molto piu' tardi:
+    le percentuali delle Impostazioni (ENPAV, IVA predefinita) sono il caso
+    peggiore, perche' passano per ``q2()`` a **ogni** emissione di fattura. Un
+    carattere sbagliato salvato li' non da' nessun segnale al momento, e poi
+    blocca la fatturazione con un errore che non spiega niente — e chi legge non
+    ha modo di collegare la cosa a un campo toccato settimane prima.
+    """
+    from app.calcolo import ValoreNonNumerico, dec
+
+    testo = str(testo or "").strip()
+    if not testo:
+        return [f"{etichetta}: manca il valore."]
+    try:
+        valore = dec(testo)
+    except ValoreNonNumerico:
+        return [f"{etichetta}: «{testo}» non è un numero."]
+    if valore < 0 or valore > massimo:
+        return [f"{etichetta} non valida: {valore}%. Dev'essere fra 0 e {massimo}."]
+    return []
+
+
+def valida_importi_riga(descrizione: str, quantita, prezzo, sconto_pct,
+                        aliquota) -> list[str]:
+    """Controlla che gli importi di una riga siano possibili, non solo numerici."""
+    errori: list[str] = []
+    dove = f" (riga «{descrizione}»)" if descrizione else ""
+
+    if aliquota < 0 or aliquota > ALIQUOTA_IVA_MASSIMA:
+        errori.append(
+            f"Aliquota IVA non valida: {aliquota}%{dove}. "
+            f"Dev'essere fra 0 e {ALIQUOTA_IVA_MASSIMA}."
+        )
+    if prezzo < 0:
+        errori.append(f"Prezzo negativo{dove}. Per uno storno usa una nota di credito.")
+    if quantita <= 0:
+        errori.append(f"Quantità dev'essere maggiore di zero{dove}.")
+    if sconto_pct < 0 or sconto_pct > 100:
+        errori.append(f"Sconto non valido: {sconto_pct}%{dove}. Dev'essere fra 0 e 100.")
+    return errori

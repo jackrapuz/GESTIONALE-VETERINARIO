@@ -53,10 +53,20 @@
     <li>Premi <strong>Invio</strong> per mandarlo.</li>
   </ol>
 
+  {# Due vie, perche' il programma non puo' sapere com'e' fatto questo computer.
+     Non e' la stessa cosa: verso l'applicazione il trascinamento consegna un file
+     vero, verso WhatsApp Web consegna solo l'indirizzo del PDF — la' serve Ctrl+V. #}
   <div class="azioni" style="margin-top:1.4rem">
-    <a class="btn" href="{{ invio.link }}" target="_blank" rel="noopener">Apri WhatsApp</a>
+    <a class="btn" href="{{ invio.link_app }}">Apri WhatsApp</a>
     <a class="btn secondario" href="{{ ritorno }}">← Torna al documento</a>
   </div>
+
+  <p class="muted" style="margin-top:.9rem; font-size:.88rem">
+    Non si apre niente? Vuol dire che WhatsApp non è installato su questo computer:
+    usa <a href="{{ invio.link_web }}" target="_blank" rel="noopener">WhatsApp Web</a>.
+    Lì il documento <strong>non si trascina</strong>: incollalo con <strong>Ctrl+V</strong>,
+    oppure allegalo con la graffetta.
+  </p>
 
   <p class="muted" style="margin-top:1.2rem; font-size:.88rem">
     Il PDF resta salvato in <code>{{ invio.cartella }}</code>, se ti servisse più tardi.

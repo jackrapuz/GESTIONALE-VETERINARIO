@@ -14,6 +14,7 @@ from datetime import date
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.calcolo import ValoreNonNumerico, dec, q2
 from app.db import get_conn
 from app.registro import (
     annota, da_fatturare, elimina_voce, genera_fattura, genera_proforma,
@@ -23,7 +24,9 @@ from app.routers.fatture import (
 )
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
-from app.validazioni import normalizza_tipo_spesa_ts, valida_tipo_spesa_ts
+from app.validazioni import (
+    normalizza_tipo_spesa_ts, valida_importi_riga, valida_tipo_spesa_ts,
+)
 
 router = APIRouter()
 
@@ -74,13 +77,32 @@ async def crea(request: Request):
         if not cid.isdigit():
             errori.append("Selezionare un cliente.")
         descrizione = str(form.get("descrizione", "")).strip()
-        prezzo = str(form.get("prezzo_unitario", "")).strip()
         if not descrizione:
             errori.append("Inserire la descrizione della prestazione.")
         # Il valore attraversa il registro e finisce nello snapshot immutabile
         # della riga di fattura: se e' fuori standard non si corregge piu'.
         tipo_spesa = normalizza_tipo_spesa_ts(str(form.get("tipo_spesa_ts", "")))
         errori += valida_tipo_spesa_ts(tipo_spesa)
+
+        # **Gli stessi controlli delle righe di fattura, e per lo stesso motivo.**
+        # Quello che si annota qui non resta qui: la voce viene poi trasformata in
+        # riga di fattura da "Fattura il registro". Un'aliquota impossibile
+        # accettata adesso rientrerebbe dalla porta di servizio, dentro un
+        # documento che non si cancella piu'.
+        importi = {"quantita": "1", "prezzo_unitario": "0", "sconto_riga_pct": "0",
+                   "aliquota_iva": "22"}
+        numeri = {}
+        for campo, predefinito in importi.items():
+            grezzo = str(form.get(campo, "")).strip() or predefinito
+            try:
+                numeri[campo] = dec(grezzo)
+            except ValoreNonNumerico:
+                errori.append(f"{campo.replace('_', ' ').capitalize()}: "
+                              f"«{grezzo}» non è un numero.")
+        if len(numeri) == len(importi):
+            errori += valida_importi_riga(
+                descrizione, numeri["quantita"], numeri["prezzo_unitario"],
+                numeri["sconto_riga_pct"], numeri["aliquota_iva"])
 
         if errori:
             return templates.TemplateResponse(
@@ -100,10 +122,14 @@ async def crea(request: Request):
             paziente_id=int(paz) if paz.isdigit() else None,
             prestazione_id=int(pres) if pres.isdigit() else None,
             descrizione=descrizione,
-            quantita=str(form.get("quantita", "1")).strip() or "1",
-            prezzo_unitario=prezzo or "0.00",
-            sconto_riga_pct=str(form.get("sconto_riga_pct", "0")).strip() or "0",
-            aliquota_iva=str(form.get("aliquota_iva", "22")).strip() or "22",
+            # Gia' convertiti e controllati sopra: si salvano normalizzati col
+            # punto decimale, come ogni altro importo nel database. Salvare "45,50"
+            # cosi' com'e' funzionerebbe (``dec()`` la virgola la legge), ma
+            # lascerebbe due notazioni diverse nella stessa colonna.
+            quantita=str(q2(numeri["quantita"])),
+            prezzo_unitario=str(q2(numeri["prezzo_unitario"])),
+            sconto_riga_pct=str(q2(numeri["sconto_riga_pct"])),
+            aliquota_iva=str(q2(numeri["aliquota_iva"])),
             tipo_spesa_ts=tipo_spesa,
             note=str(form.get("note", "")).strip(),
         )

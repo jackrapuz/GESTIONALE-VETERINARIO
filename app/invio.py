@@ -15,13 +15,21 @@ termini d'uso. Nessuna delle due strade e' adatta a questo programma.
 1. il PDF viene salvato in ``dati/da_inviare`` (resta li', ritrovabile);
 2. il file viene messo negli **appunti di Windows** *come file*, non come testo,
    cosi' nella chat basta un Ctrl+V;
-3. si apre ``wa.me`` sul numero del cliente con il messaggio gia' scritto.
+3. si apre la chat del cliente col messaggio gia' scritto — l'applicazione se c'e'
+   (:func:`link_whatsapp_app`), altrimenti WhatsApp Web (:func:`link_whatsapp_web`).
 
 Il programma non puo' attaccare l'allegato da solo: deve **consegnare il file** a
 chi manda. La pagina d'invio quindi lo mostra e lo rende afferrabile — si trascina
-nella chat, si scarica, o si incolla dagli appunti — e trascinare e' la via
-principale perche' non dipende dagli appunti, che qualunque altra copia sovrascrive
-(vedi ``templates/invio_whatsapp.html``).
+nella chat, si scarica, o si incolla dagli appunti (vedi
+``templates/invio_whatsapp.html``).
+
+**Quale via funzioni dipende da dove si lascia il file, ed e' stato misurato.**
+Trascinare consegna un documento vero solo verso l'**applicazione** WhatsApp, che
+per Windows e' un programma come gli altri. Se il bersaglio e' una **pagina web**
+— WhatsApp Web — il browser toglie di mezzo il ``DownloadURL`` e consegna solo
+l'indirizzo del PDF: nella chat finirebbe un ``http://127.0.0.1:...`` che al
+cliente non serve, e che smette di funzionare appena il gestionale si chiude. Su
+WhatsApp Web quindi vale il Ctrl+V, non il trascinamento.
 
 Resta comunque un gesto umano finale, ed e' voluto: e' l'ultimo controllo prima che
 il documento parta.
@@ -52,21 +60,62 @@ def normalizza_telefono(telefono: str, prefisso_default: str = "39") -> str:
     """Numero in formato internazionale senza simboli (es. '393401234567').
 
     Rimuove spazi/segni; se manca il prefisso internazionale assume l'Italia.
+
+    **Due trappole italiane, entrambe pagate.** Bastava una di queste perche'
+    WhatsApp si aprisse su un numero inesistente invece che sulla chat giusta:
+
+    1. *Un numero che comincia per 39 non ha per forza il prefisso.* ``391``,
+       ``392`` e ``393`` sono prefissi di cellulare veri: riconoscerli come
+       "gia' internazionale" lasciava il numero senza prefisso. Si distinguono
+       dalla **lunghezza** — con il prefisso un cellulare fa 12 cifre, senza ne
+       fa 10 — non da come comincia.
+    2. *Lo zero dei fissi non va tolto.* In Italia il prefisso urbano ``0`` fa
+       parte del numero anche in forma internazionale: Bologna e' ``+39 051``,
+       non ``+39 51``. La regola "togli gli zeri iniziali" vale altrove (Francia,
+       Regno Unito), non qui.
     """
     t = re.sub(r"[^\d+]", "", telefono or "")
     if t.startswith("+"):
         return t[1:]
     if t.startswith("00"):
         return t[2:]
-    if t.startswith(prefisso_default):
+    # Gia' internazionale solo se e' abbastanza lungo da esserlo davvero: un
+    # numero nazionale che comincia per 39 e' un cellulare 39x di 10 cifre.
+    if t.startswith(prefisso_default) and len(t) >= 11:
         return t
-    return prefisso_default + t.lstrip("0")
+    return prefisso_default + t
 
 
-def link_whatsapp(telefono: str, testo: str) -> str:
-    """Costruisce un link wa.me con messaggio precompilato."""
+def link_whatsapp_app(telefono: str, testo: str) -> str:
+    """Indirizzo che apre **l'applicazione WhatsApp** dritta sulla chat.
+
+    E' la via preferita per due motivi, non uno:
+
+    - **Apre la chat, non una pagina di passaggio.** ``wa.me`` — quello che c'era
+      prima — non e' un collegamento alla conversazione: e' una pagina di WhatsApp
+      con un pulsante "Continua sulla chat", da cui ogni volta si sceglie fra
+      applicazione e Web, e che a volte finisce sulla pagina di scaricamento.
+    - **Il trascinamento del PDF funziona.** L'applicazione e' un programma di
+      Windows, non una pagina web, e il documento le arriva come file vero. Verso
+      una pagina web il browser consegna solo l'indirizzo (vedi
+      ``templates/invio_whatsapp.html``), che al cliente non serve a niente.
+
+    Se l'applicazione non e' installata non succede nulla: per questo la pagina
+    offre accanto :func:`link_whatsapp_web`.
+    """
     numero = normalizza_telefono(telefono)
-    return f"https://wa.me/{numero}?text={quote(testo)}"
+    return f"whatsapp://send?phone={numero}&text={quote(testo)}"
+
+
+def link_whatsapp_web(telefono: str, testo: str) -> str:
+    """Indirizzo che apre **WhatsApp Web** dritto sulla chat, senza intermezzi.
+
+    La riserva per chi non ha l'applicazione sul computer. Apre la conversazione
+    giusta come l'altro, ma essendo una pagina web il PDF va incollato con
+    Ctrl+V o allegato con la graffetta: trascinarlo non lo consegna.
+    """
+    numero = normalizza_telefono(telefono)
+    return f"https://web.whatsapp.com/send?phone={numero}&text={quote(testo)}"
 
 
 def testo_messaggio(studio: dict, f: dict) -> str:
@@ -134,10 +183,15 @@ def prepara_invio_whatsapp(studio: dict, f: dict, pdf: bytes, telefono: str) -> 
         raise TelefonoMancante(
             "Questo cliente non ha un numero di telefono in anagrafica.")
     percorso = salva_pdf_da_inviare(nome_file_documento(f), pdf)
+    testo = testo_messaggio(studio, f)
     return {
         "percorso": percorso,
         "cartella": str(percorso.parent),
         "negli_appunti": copia_negli_appunti(percorso),
-        "link": link_whatsapp(telefono, testo_messaggio(studio, f)),
+        # Due indirizzi, non uno: il primo apre l'applicazione, il secondo il Web.
+        # Quale funzioni dipende da com'e' quel computer, e il programma non puo'
+        # saperlo — quindi li offre entrambi invece di indovinare.
+        "link_app": link_whatsapp_app(telefono, testo),
+        "link_web": link_whatsapp_web(telefono, testo),
         "numero": normalizza_telefono(telefono),
     }

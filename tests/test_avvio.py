@@ -21,10 +21,32 @@ def _client():
     return TestClient(m.app)
 
 
+def _spec() -> str:
+    return (Path(__file__).resolve().parent.parent
+            / "Gestionale.spec").read_text(encoding="utf-8")
+
+
 def test_lo_spec_non_apre_la_finestra_del_terminale():
-    from pathlib import Path
-    spec = (Path(__file__).resolve().parent.parent / "Gestionale.spec").read_text(encoding="utf-8")
-    assert "console=False" in spec
+    assert "console=False" in _spec()
+
+
+def test_il_pacchetto_e_una_cartella_non_un_file_unico():
+    """**Non tornare al file unico.**
+
+    Un eseguibile onefile porta l'archivio dentro di se' e a ogni avvio lo
+    scompatta in ``%TEMP%\\_MEIxxxxx``, per cancellarlo alla chiusura. Quando la
+    cancellazione non riesce — un antivirus che tiene aperto un file, una
+    chiusura forzata — la cartella resta: ne sono state trovate **21 abbandonate
+    per 290 MB**, e ogni tanto usciva l'errore "impossibile eliminare un file
+    temporaneo". Su un computer senza nessuno a guardarlo, quella roba cresce.
+
+    Con la cartella non c'e' niente da scompattare: il difetto sparisce alla
+    radice, l'avvio e' piu' rapido di circa 400 ms e l'eseguibile non resta
+    bloccato dopo la chiusura.
+    """
+    spec = _spec()
+    assert "COLLECT(" in spec, "senza COLLECT il pacchetto torna a essere un file unico"
+    assert "exclude_binaries=True" in spec
 
 
 def test_salute_permette_di_riconoscere_un_istanza_gia_avviata():
@@ -74,6 +96,59 @@ def test_le_pagine_aperte_si_leggono_da_salute():
     assert m._pagine_da_salute("gestionale-veterinario\nC:\\dati\n3") == 3
     assert m._pagine_da_salute("gestionale-veterinario\nC:\\dati") == 0
     assert m._pagine_da_salute("gestionale-veterinario\nC:\\dati\nboh") == 0
+
+
+# --- quale versione sta girando ---------------------------------------------
+
+def test_salute_dice_la_versione():
+    """Gli exe si sostituiscono copiando un file: senza questa riga, due cartelle
+    identiche possono contenere programmi diversi e non c'e' modo di saperlo se
+    non confrontando l'hash del binario."""
+    from app.versione import VERSIONE
+    righe = _client().get("/salute").text.splitlines()
+    assert righe[3] == VERSIONE
+
+
+def test_la_versione_sta_in_fondo_a_salute():
+    """**Le righe nuove vanno aggiunte in fondo, mai in mezzo.**
+
+    Chi legge ``/salute`` lo fa per posizione, e puo' essere un eseguibile di
+    un'altra versione: si sostituisce solo il binario, quindi un exe vecchio
+    puo' interrogarne uno nuovo. Una riga infilata in mezzo sposterebbe la
+    cartella dati, e il vecchio si attaccherebbe all'archivio sbagliato — che e'
+    esattamente il difetto gia' pagato con tre giorni di indagine.
+
+    Le prime tre righe restano quelle di prima: e' questo che il test difende.
+    """
+    from app.versione import VERSIONE
+    righe = _client().get("/salute").text.splitlines()
+    assert righe[0].startswith("gestionale")
+    assert Path(righe[1]).resolve() == m.DATI_DIR.resolve()
+    assert righe[2].isdigit()
+    assert righe[-1] == VERSIONE, "la versione deve essere l'ultima riga"
+
+
+def test_una_risposta_di_una_versione_futura_resta_leggibile():
+    """L'altro verso della compatibilita': se un domani ``/salute`` guadagnasse
+    altre righe, il codice di oggi deve continuare a leggere le sue."""
+    futura = f"gestionale-veterinario\n{m.DATI_DIR}\n2\n2027.01.01\nchissa-che-altro"
+    assert m._stessa_installazione(futura) is True
+    assert m._pagine_da_salute(futura) == 2
+
+
+def test_la_versione_ha_il_formato_di_una_data():
+    """``AAAA.MM.GG``, come i tag in VERSIONI.md: se qualcuno scrive '2026.8.7'
+    o 'v2026.08.07' le versioni non si ordinano piu' guardandole."""
+    import re
+    from app.versione import VERSIONE
+    assert re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", VERSIONE), VERSIONE
+
+
+def test_la_versione_compare_nel_piede_delle_pagine():
+    """Al telefono si chiede "cosa c'e' scritto in fondo", non si calcola un hash."""
+    from app.versione import VERSIONE
+    testo = _client().get("/").text
+    assert f"versione {VERSIONE}" in testo
 
 
 def test_portare_in_primo_piano_non_esplode_se_non_trova_nulla():
@@ -327,3 +402,118 @@ def test_l_output_viene_dirottato_su_file_quando_manca_la_console(tmp_path, monk
 
 def test_con_la_console_l_output_resta_dov_e():
     assert m._dirotta_output() is None
+
+
+# --- chiudere la pagina spegne subito ---------------------------------------
+
+def test_la_grazia_e_breve_quanto_serve_a_una_navigazione():
+    """Chiudere la finestra deve spegnere il gestionale **subito**, come ci si
+    aspetta da una pagina qualsiasi.
+
+    Trenta secondi erano una misura grossolana: il buco vero fra una pagina e
+    l'altra dura quanto ci mette il browser a chiedere quella nuova. Quello che
+    dura davvero e' la *generazione* di una pagina lenta, e per quella c'e' il
+    contatore delle richieste in corso, non il timer.
+    """
+    assert m.GRAZIA_SECONDI <= 2.0, "troppo lunga: la chiusura non si sente immediata"
+    assert m.INTERVALLO_CONTROLLO <= 0.5, "il guardiano ricontrolla troppo di rado"
+    # Il guardiano non puo' accorgersene prima di guardare: il ritardo peggiore
+    # e' grazia + un giro di controllo.
+    assert m.GRAZIA_SECONDI + m.INTERVALLO_CONTROLLO < 3.0
+
+
+def test_il_guardiano_non_spegne_mentre_sta_servendo_una_richiesta(monkeypatch):
+    """**La trappola della grazia corta.** La vita si segnava all'inizio della
+    richiesta: una pagina lenta da generare (un PDF, uno zip di export) faceva
+    scadere il tempo mentre la si stava generando, e il gestionale si spegneva da
+    solo a meta' lavoro. Nessuna pagina e' collegata in quel momento — quella
+    vecchia se n'e' andata e la nuova non c'e' ancora — quindi il contatore delle
+    pagine da solo non basta.
+    """
+    import threading
+    import time
+
+    monkeypatch.setattr(m, "GRAZIA_SECONDI", 0.05)
+    monkeypatch.setattr(m, "INTERVALLO_CONTROLLO", 0.01)
+    monkeypatch.setattr(m, "_ultima_vita", 0.0)      # vita segnata tanto tempo fa
+    monkeypatch.setattr(m, "_pagine_aperte", 0)      # nessuna pagina collegata
+    monkeypatch.setattr(m, "_richieste_in_corso", 1)  # ...ma si sta servendo qualcosa
+
+    finto = ServerFinto()
+    t = threading.Thread(target=m._guardiano, args=(finto,), daemon=True)
+    t.start()
+    time.sleep(0.3)  # sei volte la grazia
+    assert finto.should_exit is False, \
+        "si e' spento mentre stava ancora generando una pagina"
+
+
+def test_finita_la_richiesta_si_spegne(monkeypatch):
+    """L'altra meta': il contatore non deve diventare un modo per non morire mai."""
+    import threading
+    import time
+
+    monkeypatch.setattr(m, "GRAZIA_SECONDI", 0.05)
+    monkeypatch.setattr(m, "INTERVALLO_CONTROLLO", 0.01)
+    monkeypatch.setattr(m, "_ultima_vita", 0.0)
+    monkeypatch.setattr(m, "_pagine_aperte", 0)
+    monkeypatch.setattr(m, "_richieste_in_corso", 0)
+
+    finto = ServerFinto()
+    t = threading.Thread(target=m._guardiano, args=(finto,), daemon=True)
+    t.start()
+    t.join(timeout=2)
+    assert finto.should_exit is True, "senza pagine ne' richieste doveva spegnersi"
+
+
+def test_il_contatore_delle_richieste_scende_anche_se_la_richiesta_fallisce():
+    """Se il ``finally`` non ci fosse, un solo errore lascerebbe il contatore
+    alzato per sempre e il gestionale non si spegnerebbe **mai piu'**: proprio
+    l'orfano invisibile che questa macchina esiste per evitare."""
+    prima = m.richieste_in_corso()
+    client = TestClient(m.app, raise_server_exceptions=False)
+    client.get("/rotta-che-non-esiste-di-sicuro")
+    assert m.richieste_in_corso() == prima
+
+
+def test_una_richiesta_normale_non_lascia_il_contatore_alzato():
+    prima = m.richieste_in_corso()
+    _client().get("/clienti")
+    assert m.richieste_in_corso() == prima
+
+
+# --- il browser non deve richiedere ogni volta le stesse cose ----------------
+
+def test_i_file_statici_si_possono_tenere_in_cache():
+    """Senza ``Cache-Control`` il browser richiede foglio di stile e icona a ogni
+    cambio pagina, solo per sentirsi dire che non sono cambiati."""
+    r = _client().get("/static/css/stile.css")
+    assert r.status_code == 200
+    assert "max-age" in r.headers.get("cache-control", ""), \
+        "il browser li richiedera' a ogni pagina"
+
+
+def test_gli_indirizzi_dei_file_statici_portano_la_versione():
+    """**Le due cose vanno insieme.** Dire al browser "tienilo per un anno" senza
+    cambiare l'indirizzo a ogni versione vuol dire che dopo un aggiornamento
+    resta attaccato al foglio di stile vecchio — e nessuno capisce perche' il
+    programma nuovo si veda storto. Il ``?v=`` e' quello che rende sicura la
+    cache lunga: cambia la versione, cambia l'indirizzo, il browser riscarica.
+    """
+    from app.versione import VERSIONE
+    html = _client().get("/clienti").text
+    assert f"/static/css/stile.css?v={VERSIONE}" in html
+    assert f"/static/img/marchio.ico?v={VERSIONE}" in html
+
+
+def test_la_pagina_molla_il_flusso_quando_la_si_lascia():
+    """Il browser concede sei connessioni per sito e il flusso di presenza e'
+    permanente: se quello vecchio sopravvive mentre la pagina nuova ne apre gia'
+    un altro, con qualche scheda aperta si tocca il tetto e le pagine si mettono
+    in coda dietro connessioni che non finiscono mai.
+
+    ``pagehide`` e non ``unload``: ``unload`` escluderebbe la pagina dalla cache
+    indietro/avanti, rendendo lento proprio il tornare indietro.
+    """
+    html = _client().get("/clienti").text
+    assert "pagehide" in html and "flusso.close()" in html
+    assert "'unload'" not in html and '"unload"' not in html

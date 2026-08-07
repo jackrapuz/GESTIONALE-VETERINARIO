@@ -4,7 +4,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.db import get_conn
+from urllib.parse import quote_plus
+
+from app.db import get_conn, usi_che_impediscono_cancellazione
 from app.templating import templates
 
 router = APIRouter()
@@ -147,8 +149,21 @@ async def aggiorna(request: Request, pid: int):
 
 @router.post("/pazienti/{pid}/elimina")
 def elimina(pid: int):
+    """Toglie un cavallo, se non compare gia' su documenti o nel registro.
+
+    Il nome del cavallo finisce nello snapshot delle righe di fattura, che e'
+    immutabile: toglierlo dall'anagrafica non cambia i documenti gia' emessi, ma
+    il collegamento non si puo' spezzare. Meglio dirlo che far uscire un errore
+    di sistema.
+    """
     conn = get_conn()
     try:
+        usi = usi_che_impediscono_cancellazione(conn, "pazienti", pid)
+        if usi:
+            return RedirectResponse(
+                "/pazienti?msg=" + quote_plus(
+                    f"Non si può eliminare questo cavallo: compare in {', '.join(usi)}."),
+                status_code=303)
         with conn:
             conn.execute("DELETE FROM pazienti WHERE id=?", (pid,))
     finally:

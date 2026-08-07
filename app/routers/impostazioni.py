@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -9,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.db import get_conn
 from app.numerazione import esistono_documenti, imposta_partenza, numero_corrente
 from app.templating import templates
+from app.validazioni import valida_percentuale
 
 router = APIRouter()
 
@@ -67,7 +69,25 @@ async def salva_numerazione(request: Request):
 
 @router.post("/impostazioni")
 async def salva_impostazioni(request: Request):
+    """Salva i dati dello studio, **dopo** aver controllato le percentuali.
+
+    Le due percentuali qui dentro non restano in questa pagina: ``enpav_pct`` e
+    ``iva_default_pct`` vengono rilette e passate a ``q2()`` a **ogni** emissione
+    di fattura. Salvate senza controllo, un carattere di troppo non dava alcun
+    segnale in questa pagina e poi bloccava **tutta la fatturazione** con un
+    errore di sistema — e nessuno avrebbe collegato la cosa a un campo toccato
+    settimane prima. E' il difetto piu' pericoloso trovato nella revisione: non
+    per quello che rompe subito, ma per quanto tempo passa prima che si veda.
+    """
     form = await request.form()
+    errori = (valida_percentuale(form.get("enpav_pct"), "Contributo ENPAV")
+              + valida_percentuale(form.get("iva_default_pct"), "IVA predefinita"))
+    if errori:
+        return RedirectResponse(
+            "/impostazioni?msg=" + quote_plus(
+                " ".join(errori) + " Le impostazioni NON sono state salvate."),
+            status_code=303)
+
     colonne = _CAMPI + _CHECKBOX
     valori = [str(form.get(c, "")).strip() for c in _CAMPI]
     valori += [1 if form.get(c) else 0 for c in _CHECKBOX]

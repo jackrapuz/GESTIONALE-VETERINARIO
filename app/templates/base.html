@@ -4,8 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titolo %}{{ titolo|default('Gestionale') }}{% endblock %} · Gestionale Veterinario</title>
-  <link rel="icon" href="/static/img/marchio.ico" sizes="any">
-  <link rel="stylesheet" href="/static/css/stile.css">
+  {# Il ?v= non e' decorativo: permette al server di dire al browser "tienili per
+     sempre" (vedi StaticiConCache in app/main.py) senza il rischio che dopo un
+     aggiornamento resti attaccato al foglio di stile vecchio. Cambia la versione,
+     cambia l'indirizzo, e il browser riscarica. Senza, a ogni cambio pagina
+     ricontrollava foglio di stile e icona. #}
+  <link rel="icon" href="/static/img/marchio.ico?v={{ VERSIONE }}" sizes="any">
+  <link rel="stylesheet" href="/static/css/stile.css?v={{ VERSIONE }}">
 </head>
 <body>
   {% import "_ui.html" as ui with context %}
@@ -37,6 +42,10 @@
 
   <footer class="footer">
     {{ ui.ferro() }} Dati salvati solo su questo computer · nessuna connessione a Internet
+    {# La versione serve a dire al telefono quale programma si ha davanti: gli
+       eseguibili si sostituiscono a mano, quindi due cartelle identiche possono
+       contenere versioni diverse. Selezionabile col mouse, per poterla dettare. #}
+    <div class="versione">versione {{ VERSIONE }}</div>
     {# Senza finestra del terminale, questo e' il modo per chiudere il gestionale. #}
     <form method="post" action="/spegni" class="spegni"
           onsubmit="return confirm('Chiudere il gestionale?\n\nI dati sono già salvati.');">
@@ -78,6 +87,22 @@
     flusso.onerror = function () {
       fetch('/salute', { cache: 'no-store' }).catch(avvisaSpento);
     };
+
+    // Lasciando la pagina, il flusso si chiude SUBITO invece di aspettare che ci
+    // pensi il sistema operativo. Due motivi, tutti e due concreti:
+    //
+    //  - il browser concede **sei connessioni per sito**, e questa e' permanente.
+    //    Se quella vecchia sopravvive mentre la pagina nuova ne apre gia' un'altra,
+    //    le connessioni si accavallano: con qualche scheda aperta si arriva al
+    //    tetto, e allora e' la *pagina* a mettersi in coda dietro connessioni che
+    //    non finiscono mai. E' il caso in cui "cambiare pagina ci mette un po'".
+    //  - il server si accorge prima che non c'e' piu' nessuno, quindi chiudere la
+    //    finestra spegne il gestionale ancora piu' in fretta.
+    //
+    // `pagehide` e non `unload`: `unload` impedisce al browser di mettere la
+    // pagina nella cache indietro/avanti, e la renderebbe piu' lenta proprio
+    // quando si torna indietro.
+    addEventListener('pagehide', function () { flusso.close(); });
   })();
   </script>
   {% endif %}
