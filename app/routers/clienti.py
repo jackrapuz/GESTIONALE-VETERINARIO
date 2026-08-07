@@ -4,7 +4,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.db import get_conn
+from urllib.parse import quote_plus
+
+from app.db import get_conn, usi_che_impediscono_cancellazione
 from app.templating import templates
 from app.validazioni import valida_codice_fiscale, valida_partita_iva
 
@@ -136,8 +138,23 @@ async def aggiorna(request: Request, cid: int):
 
 @router.post("/clienti/{cid}/elimina")
 def elimina(cid: int):
+    """Toglie un cliente, se non e' rimasto attaccato a niente.
+
+    Prima usciva ``FOREIGN KEY constraint failed`` come pagina di errore di
+    sistema: sembrava un guasto, e non diceva cosa lo impedisse. Il rifiuto e'
+    giusto — le fatture emesse restano, per legge, e devono restare intestate a
+    qualcuno — ma va spiegato. I cavalli invece se ne vanno col proprietario:
+    la loro chiave e' ``ON DELETE CASCADE``.
+    """
     conn = get_conn()
     try:
+        usi = usi_che_impediscono_cancellazione(conn, "clienti", cid)
+        if usi:
+            return RedirectResponse(
+                "/clienti?msg=" + quote_plus(
+                    f"Non si può eliminare questo cliente: ha {', '.join(usi)}. "
+                    "I documenti emessi devono restare intestati a lui."),
+                status_code=303)
         with conn:
             conn.execute("DELETE FROM clienti WHERE id=?", (cid,))
     finally:

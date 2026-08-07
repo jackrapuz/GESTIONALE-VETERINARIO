@@ -5,7 +5,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.calcolo import q2
-from app.db import get_conn
+from urllib.parse import quote_plus
+
+from app.db import get_conn, usi_che_impediscono_cancellazione
 from app.templating import templates
 from app.validazioni import (
     TIPI_SPESA_TS, normalizza_tipo_spesa_ts, valida_tipo_spesa_ts,
@@ -130,8 +132,22 @@ async def aggiorna(request: Request, pid: int):
 
 @router.post("/listino/{pid}/elimina")
 def elimina(pid: int):
+    """Toglie una voce di listino, se non e' gia' finita su qualche documento.
+
+    Qui la strada giusta c'e' gia' ed e' un'altra: togliere la spunta **Attiva**.
+    La voce sparisce dai menu delle nuove fatture ma resta collegata a quelle
+    vecchie. Il messaggio lo dice, altrimenti si resta bloccati senza sapere che
+    fare.
+    """
     conn = get_conn()
     try:
+        usi = usi_che_impediscono_cancellazione(conn, "prestazioni", pid)
+        if usi:
+            return RedirectResponse(
+                "/listino?msg=" + quote_plus(
+                    f"Non si può eliminare questa voce: è usata in {', '.join(usi)}. "
+                    "Per non vederla più fra le nuove, aprila e togli la spunta «Attiva»."),
+                status_code=303)
         with conn:
             conn.execute("DELETE FROM prestazioni WHERE id=?", (pid,))
     finally:

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import socket
+import sqlite3
 import sys
 import threading
 import time
+import traceback
 import webbrowser
 from datetime import date
 from decimal import Decimal
@@ -352,6 +354,29 @@ def create_app() -> FastAPI:
              # un orfano rimasto in piedi per tre giorni sulla porta 8420,
              # invisibile e con codice vecchio. Meglio dire la verita'.
              "davvero_chiuso": _server is not None})
+
+    @app.exception_handler(sqlite3.IntegrityError)
+    def vincolo_del_database(request: Request, exc: sqlite3.IntegrityError):
+        """Rete di sicurezza: un vincolo del database non deve mai uscire grezzo.
+
+        I posti dove si puo' sbattere contro un vincolo sono controllati uno per
+        uno (vedi ``usi_che_impediscono_cancellazione`` in ``app/db.py``), e
+        quello e' il modo giusto: li' si sa *cosa* blocca l'operazione e lo si
+        puo' dire. Questa e' la rete sotto, per il legame che qualcuno
+        aggiungera' domani senza ricordarsi di controllarlo: meglio una frase
+        comprensibile che ``FOREIGN KEY constraint failed`` in mezzo a una
+        pagina di errore di sistema.
+
+        La traccia completa finisce comunque in ``dati/avvio.log``: serve a chi
+        deve capire, e non toglierla e' l'unico modo di accorgersi che un
+        controllo mancava.
+        """
+        traceback.print_exc()
+        return templates.TemplateResponse(
+            request, "vincolo.html",
+            {"titolo": "Operazione non possibile", "dettaglio": str(exc)},
+            status_code=409,
+        )
 
     return app
 

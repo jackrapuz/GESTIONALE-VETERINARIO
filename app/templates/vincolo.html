@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titolo %}Operazione non possibile{% endblock %}
+{% block contenuto %}
+{# La rete sotto ai controlli fatti a mano (vedi usi_che_impediscono_cancellazione
+   in app/db.py). Se si finisce qui vuol dire che un legame nuovo non e' ancora
+   controllato dove viene usato: la pagina deve rassicurare, non spiegare il
+   database. #}
+<div class="scheda" style="max-width:560px; margin:0 auto">
+  <h1>Non si può fare</h1>
+  <p>Questa cosa è ancora collegata a qualcos'altro nel gestionale — di solito
+    un documento già emesso, che deve restare com'è.</p>
+  <p><strong>I tuoi dati non sono stati toccati:</strong> l'operazione è stata
+    annullata per intero, niente è cambiato.</p>
+  <p class="muted" style="font-size:.88rem">
+    Se non capisci cosa la blocchi, cerca il nome nelle <strong>Fatture</strong>,
+    nei <strong>Preventivi</strong> e nel <strong>Registro</strong>: comparirà in
+    uno dei tre.
+  </p>
+  <div class="azioni" style="margin-top:1.4rem">
+    <a class="btn" href="/">Torna alla pagina iniziale</a>
+  </div>
+  <p class="muted" style="margin-top:1.4rem; font-size:.8rem">
+    Dettaglio tecnico: <code>{{ dettaglio }}</code>
+  </p>
+</div>
+{% endblock %}
