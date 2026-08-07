@@ -13,13 +13,18 @@ termini d'uso. Nessuna delle due strade e' adatta a questo programma.
 **Come funziona qui.** Tre pezzi, tutti locali:
 
 1. il PDF viene salvato in ``dati/da_inviare`` (resta li', ritrovabile);
-2. il file viene messo negli **appunti di Windows** *come file*, non come testo:
-   e' l'unico modo di far arrivare un allegato dentro WhatsApp senza API, perche'
-   nella chat basta un Ctrl+V;
+2. il file viene messo negli **appunti di Windows** *come file*, non come testo,
+   cosi' nella chat basta un Ctrl+V;
 3. si apre ``wa.me`` sul numero del cliente con il messaggio gia' scritto.
 
-Restano quindi due gesti umani (incollare e premere invio), ed e' voluto: e' anche
-l'ultimo controllo prima che il documento parta.
+Il programma non puo' attaccare l'allegato da solo: deve **consegnare il file** a
+chi manda. La pagina d'invio quindi lo mostra e lo rende afferrabile — si trascina
+nella chat, si scarica, o si incolla dagli appunti — e trascinare e' la via
+principale perche' non dipende dagli appunti, che qualunque altra copia sovrascrive
+(vedi ``templates/invio_whatsapp.html``).
+
+Resta comunque un gesto umano finale, ed e' voluto: e' l'ultimo controllo prima che
+il documento parta.
 """
 from __future__ import annotations
 

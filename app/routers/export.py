@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from app import export_commercialista as exc
-from app import export_ts
+from app import export_ts, ts_xml
 from app.db import get_conn
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
@@ -26,44 +26,55 @@ def _scarica(contenuto: bytes, nome: str, media: str) -> Response:
                     headers={"Content-Disposition": f'attachment; filename="{nome}"'})
 
 
+def _esito_ts(conn, dal: str, al: str) -> dict:
+    return export_ts.genera_export(conn, dal, al, leggi_studio(conn))
+
+
 @router.get("/export", response_class=HTMLResponse)
 def pagina(request: Request, dal: str | None = None, al: str | None = None):
     dal, al = _periodo(dal, al)
     conn = get_conn()
     try:
-        ts = export_ts.genera_export(conn, dal, al)
+        ts = _esito_ts(conn, dal, al)
         n_registro = len(exc.registro(conn, dal, al))
     finally:
         conn.close()
     return templates.TemplateResponse(
         request, "export.html",
         {"titolo": "Esportazioni", "dal": dal, "al": al,
-         "ts_ok": ts["n_ok"], "ts_scarti": ts["n_scarti"], "ts_dettaglio_scarti": ts["scarti"],
-         "ts_versione": ts["versione"], "n_registro": n_registro},
+         "ts_ok": ts["n_ok"], "ts_esclusi": ts["n_esclusi"], "ts_scarti": ts["n_scarti"],
+         "ts_dettaglio_esclusi": ts["esclusi"], "ts_dettaglio_scarti": ts["scarti"],
+         # La pagina deve poter dire che il file per il portale non c'e' ancora,
+         # invece di offrirne uno che verrebbe respinto.
+         "ts_xml_pronto": ts_xml.disponibile(),
+         "n_registro": n_registro},
     )
 
 
 # --- Sistema TS ------------------------------------------------------------
-@router.get("/export/ts.csv")
-def ts_csv(dal: str | None = None, al: str | None = None):
+@router.get("/export/ts-anteprima.csv")
+def ts_anteprima(dal: str | None = None, al: str | None = None):
+    """Anteprima di controllo, una riga per voce di spesa. NON e' il file da caricare."""
     dal, al = _periodo(dal, al)
     conn = get_conn()
     try:
-        out = export_ts.genera_export(conn, dal, al)
+        out = _esito_ts(conn, dal, al)
     finally:
         conn.close()
-    return _scarica(out["csv"], f"sistema_ts_{dal}_{al}.csv", "text/csv")
+    return _scarica(out["anteprima_csv"],
+                    f"anteprima_sistema_ts_{dal}_{al}.csv", "text/csv")
 
 
-@router.get("/export/ts-scarti.csv")
-def ts_scarti(dal: str | None = None, al: str | None = None):
+@router.get("/export/ts-problemi.csv")
+def ts_problemi(dal: str | None = None, al: str | None = None):
     dal, al = _periodo(dal, al)
     conn = get_conn()
     try:
-        out = export_ts.genera_export(conn, dal, al)
+        out = _esito_ts(conn, dal, al)
     finally:
         conn.close()
-    return _scarica(out["scarti_csv"], f"sistema_ts_scarti_{dal}_{al}.csv", "text/csv")
+    return _scarica(export_ts.report_problemi_csv(out),
+                    f"sistema_ts_da_correggere_{dal}_{al}.csv", "text/csv")
 
 
 # --- Commercialista --------------------------------------------------------

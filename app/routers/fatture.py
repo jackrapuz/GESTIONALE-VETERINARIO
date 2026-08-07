@@ -22,6 +22,7 @@ from app.numerazione import verifica_continuita
 from app.pdf_fattura import genera_pdf_fattura
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
+from app.validazioni import normalizza_tipo_spesa_ts, valida_tipo_spesa_ts
 
 router = APIRouter()
 
@@ -136,7 +137,7 @@ def _righe_da_form(form, nomi_pazienti: dict[int, str] | None = None) -> list[Ri
             prezzo_unitario=dec(prezzo),
             aliquota_iva=dec(aliquote[i] if i < len(aliquote) else "22") or dec("22"),
             sconto_riga_pct=dec(sconti[i] if i < len(sconti) else "0"),
-            tipo_spesa_ts=(tipi[i] if i < len(tipi) else "SV") or "SV",
+            tipo_spesa_ts=normalizza_tipo_spesa_ts(tipi[i] if i < len(tipi) else ""),
             prestazione_id=int(pid) if str(pid).strip().isdigit() else None,
             paziente_id=paz_id,
             paziente_nome=nomi_pazienti.get(paz_id, "") if paz_id else "",
@@ -215,6 +216,11 @@ async def crea(request: Request):
         righe = _righe_da_form(form, _nomi_pazienti(conn))
         if not righe:
             errori.append("Inserire almeno una riga con importo.")
+        # Ultimo controllo prima dello snapshot immutabile: da qui in poi il tipo
+        # di spesa non si corregge piu', e un codice fuori standard renderebbe il
+        # documento non trasmissibile al Sistema TS senza dare alcun segnale.
+        for errore in {e for r in righe for e in valida_tipo_spesa_ts(r.tipo_spesa_ts)}:
+            errori.append(errore)
 
         ritenuta_applicata = bool(form.get("ritenuta_applicata"))
         if ritenuta_applicata and cliente is not None and not cliente["sostituto_imposta"]:
@@ -319,7 +325,9 @@ def invia_whatsapp(request: Request, fid: int):
     return templates.TemplateResponse(
         request, "invio_whatsapp.html",
         {"titolo": f"Invio {f['numero_visualizzato']}", "doc": f,
-         "invio": esito, "ritorno": f"/fatture/{fid}"},
+         "invio": esito, "ritorno": f"/fatture/{fid}",
+         # Da qui la pagina prende il file da mostrare, scaricare e trascinare.
+         "pdf_url": f"/fatture/{fid}/pdf"},
     )
 
 

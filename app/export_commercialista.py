@@ -6,12 +6,21 @@
 
 Le note di credito compaiono con importi di segno negativo, cosi' il riepilogo
 IVA rappresenta l'imposta netta del periodo.
+
+**I valori restano tipizzati.** ``registro()`` produce ``Decimal`` per gli importi
+e ``date`` per le date, non stringhe gia' formattate: la resa spetta a chi scrive
+il file. Nel CSV ``csv.writer`` li rende identici a prima (``str(Decimal('95.00'))``
+e' ``'95.00'``); nell'Excel diventano celle numeriche e celle data, che si possono
+sommare e ordinare. Prima erano testo in entrambi, e il commercialista che
+selezionava la colonna Totale non otteneva nessuna somma — cioe' mancava l'unico
+motivo per consegnare un .xlsx invece del CSV.
 """
 from __future__ import annotations
 
 import csv
 import io
 import zipfile
+from datetime import date, datetime
 from decimal import Decimal
 
 from openpyxl import Workbook
@@ -30,6 +39,18 @@ def _segno(tipo: str) -> Decimal:
     return Decimal("-1") if tipo == "nota_credito" else Decimal("1")
 
 
+def _data(valore: str) -> date | str:
+    """Data ISO del database come oggetto ``date``.
+
+    Se il valore non e' una data valida viene restituito com'e': meglio una cella
+    con dentro il testo originale che un export che si rifiuta di generarsi.
+    """
+    try:
+        return datetime.strptime((valore or "").strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return valore
+
+
 def _documenti(conn, dal: str, al: str) -> list[dict]:
     righe = conn.execute(
         "SELECT * FROM fatture "
@@ -41,7 +62,10 @@ def _documenti(conn, dal: str, al: str) -> list[dict]:
 
 
 def registro(conn, dal: str, al: str) -> list[list]:
-    """Righe del registro (liste allineate a COLONNE), con segno per le note credito."""
+    """Righe del registro (liste allineate a COLONNE), con segno per le note credito.
+
+    Importi come ``Decimal`` e date come ``date``: vedi la nota in testa al modulo.
+    """
     out: list[list] = []
     for f in _documenti(conn, dal, al):
         f["righe"] = leggi_fattura(conn, f["id"])["righe"]
@@ -50,17 +74,17 @@ def registro(conn, dal: str, al: str) -> list[list]:
         s = _segno(f["tipo_documento"])
         out.append([
             f["numero_visualizzato"],
-            f["data_emissione"],
+            _data(f["data_emissione"]),
             "Nota credito" if f["tipo_documento"] == "nota_credito" else "Fattura",
             f["cli_denominazione"],
             f["cli_codice_fiscale"],
             f["cli_partita_iva"],
-            str(s * Decimal(f["imponibile"])),
-            str(s * Decimal(f["contributo_enpav"])),
+            s * Decimal(f["imponibile"]),
+            s * Decimal(f["contributo_enpav"]),
             aliquote,
-            str(s * Decimal(f["iva_totale"])),
-            str(s * Decimal(f["totale_documento"])),
-            str(s * Decimal(f["ritenuta_importo"])),
+            s * Decimal(f["iva_totale"]),
+            s * Decimal(f["totale_documento"]),
+            s * Decimal(f["ritenuta_importo"]),
             f["stato"],
         ])
     return out
@@ -81,8 +105,8 @@ def riepilogo_iva(conn, dal: str, al: str) -> list[dict]:
             a["base_iva"] += s * Decimal(g["base_iva"])
             a["iva"] += s * Decimal(g["iva"])
     return [
-        {"aliquota": k, "imponibile": str(v["imponibile"]), "enpav": str(v["enpav"]),
-         "base_iva": str(v["base_iva"]), "iva": str(v["iva"])}
+        {"aliquota": k, "imponibile": v["imponibile"], "enpav": v["enpav"],
+         "base_iva": v["base_iva"], "iva": v["iva"]}
         for k, v in sorted(acc.items())
     ]
 
@@ -102,6 +126,31 @@ def genera_csv(conn, dal: str, al: str) -> bytes:
     return b"\xef\xbb\xbf" + buf.getvalue().encode("utf-8")
 
 
+# Colonne del registro che contengono importi (0-based su COLONNE).
+_COLONNE_IMPORTO = {6, 7, 9, 10, 11}
+_COLONNA_DATA = 1
+
+_FORMATO_IMPORTO = "#,##0.00"
+_FORMATO_DATA = "DD/MM/YYYY"
+
+
+def _scrivi_riga(ws, valori: list) -> None:
+    """Appende una riga convertendo i Decimal in numeri e applicando i formati.
+
+    openpyxl scriverebbe un ``Decimal`` come testo: va passato a ``float``. La
+    perdita di precisione non e' un problema qui — sono importi a due decimali,
+    ben dentro l'esatto rappresentabile — mentre una cella di testo lo sarebbe,
+    perche' non si somma.
+    """
+    ws.append([float(v) if isinstance(v, Decimal) else v for v in valori])
+    riga = ws[ws.max_row]
+    for i, cella in enumerate(riga):
+        if i in _COLONNE_IMPORTO:
+            cella.number_format = _FORMATO_IMPORTO
+        elif i == _COLONNA_DATA and isinstance(cella.value, date):
+            cella.number_format = _FORMATO_DATA
+
+
 def genera_xlsx(conn, dal: str, al: str) -> bytes:
     wb = Workbook()
     ws = wb.active
@@ -110,7 +159,9 @@ def genera_xlsx(conn, dal: str, al: str) -> bytes:
     for c in ws[1]:
         c.font = Font(bold=True)
     for r in registro(conn, dal, al):
-        ws.append(r)
+        _scrivi_riga(ws, r)
+    # L'intestazione resta visibile scorrendo: un registro annuale e' lungo.
+    ws.freeze_panes = "A2"
 
     ws2 = wb.create_sheet("Riepilogo IVA")
     ws2.append(["Aliquota %", "Imponibile", "ENPAV", "Base IVA", "IVA"])
@@ -119,6 +170,9 @@ def genera_xlsx(conn, dal: str, al: str) -> bytes:
     for g in riepilogo_iva(conn, dal, al):
         ws2.append([g["aliquota"], float(g["imponibile"]), float(g["enpav"]),
                     float(g["base_iva"]), float(g["iva"])])
+        for cella in list(ws2[ws2.max_row])[1:]:
+            cella.number_format = _FORMATO_IMPORTO
+    ws2.freeze_panes = "A2"
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -126,7 +180,11 @@ def genera_xlsx(conn, dal: str, al: str) -> bytes:
 
 
 def genera_zip_pdf(conn, dal: str, al: str, studio: dict) -> bytes:
-    """ZIP con le copie PDF delle fatture (non note di credito) del periodo."""
+    """ZIP con le copie PDF di tutti i documenti del periodo, note di credito incluse.
+
+    Le note di credito servono al commercialista quanto le fatture: senza, la
+    contabilita' del periodo non torna con il registro qui accanto.
+    """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for f in _documenti(conn, dal, al):

@@ -19,10 +19,28 @@ from typing import Callable
 # - in sviluppo: la cartella che contiene "app/";
 # - come .exe PyInstaller: la cartella dell'eseguibile (i dati devono restare
 #   ACCANTO all'exe e persistere, NON nella cartella temporanea _MEIPASS).
-if getattr(sys, "frozen", False):
-    BASE_DIR = Path(sys.executable).resolve().parent
-else:
-    BASE_DIR = Path(__file__).resolve().parent.parent
+def _radice_dati(congelato: bool, eseguibile: Path, sorgente: Path) -> Path:
+    """Cartella che contiene "dati": accanto all'exe, o alla radice del progetto.
+
+    **Perche' e' una funzione a parte.** Da questa scelta dipende se, sostituendo
+    l'exe con una versione nuova, la dottoressa ritrova le sue fatture o si trova
+    davanti un programma vuoto. Il ramo congelato non e' percorribile sotto test
+    (in pytest ``sys.frozen`` e' sempre falso), quindi la regola vive qui, dove
+    entrambi i rami possono essere verificati passando i parametri.
+
+    Come .exe la radice e' la cartella dell'eseguibile. **Mai** ``sys._MEIPASS``:
+    e' una cartella temporanea cancellata alla chiusura, e database e backup
+    sparirebbero a ogni avvio senza lasciare traccia.
+    """
+    if congelato:
+        return eseguibile.resolve().parent
+    return sorgente.resolve().parent.parent
+
+
+# Unica sorgente del percorso: backup.py, invio.py e main.py derivano tutti da
+# DATI_DIR, nessuno se lo ricalcola per conto suo.
+BASE_DIR = _radice_dati(bool(getattr(sys, "frozen", False)),
+                        Path(sys.executable), Path(__file__))
 DATI_DIR = BASE_DIR / "dati"
 DB_PATH = DATI_DIR / "gestionale.db"
 

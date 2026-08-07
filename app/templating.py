@@ -11,6 +11,8 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
+from app.validazioni import TIPI_SPESA_TS
+
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -47,3 +49,8 @@ def si_no(valore) -> str:
 templates.env.filters["euro"] = euro
 templates.env.filters["data_it"] = data_it
 templates.env.filters["si_no"] = si_no
+
+# I codici di spesa del Sistema TS servono a due form (listino e registro) e sono
+# un elenco chiuso di legge: come globale evitano di essere passati a mano da ogni
+# router, e soprattutto evitano che qualcuno ne riscriva a mano una copia.
+templates.env.globals["TIPI_SPESA_TS"] = TIPI_SPESA_TS
