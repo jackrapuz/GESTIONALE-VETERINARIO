@@ -84,6 +84,27 @@ def segna_vita() -> None:
     _ultima_vita = time.monotonic()
 
 
+class StaticiConCache(StaticFiles):
+    """File statici che il browser puo' tenersi, invece di richiederli ogni volta.
+
+    Senza intestazione ``Cache-Control`` il browser ha ETag e data di modifica,
+    quindi non riscarica il contenuto — ma **chiede lo stesso**, a ogni cambio di
+    pagina, per sentirsi dire "non e' cambiato". Sono due richieste in piu' per
+    ogni clic (foglio di stile e icona) che non servono a niente.
+
+    Dire "tienilo per un anno" e' sicuro solo perche' gli indirizzi portano
+    ``?v=`` con la versione del programma (vedi ``templates/base.html``):
+    all'aggiornamento l'indirizzo cambia e il browser riscarica da se'. Senza quel
+    pezzo, dopo un aggiornamento resterebbe attaccato al foglio di stile vecchio
+    e nessuno capirebbe perche'.
+    """
+
+    def file_response(self, *args, **kwargs):
+        risposta = super().file_response(*args, **kwargs)
+        risposta.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return risposta
+
+
 def _entra_richiesta() -> None:
     global _richieste_in_corso
     with _lucchetto:
@@ -195,7 +216,8 @@ def create_app() -> FastAPI:
     init_db()
 
     app = FastAPI(title="Gestionale Fatturazione", docs_url=None, redoc_url=None)
-    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+    app.mount("/static", StaticiConCache(directory=str(BASE_DIR / "static")),
+              name="static")
 
     @app.middleware("http")
     async def tieni_in_vita(request: Request, call_next):

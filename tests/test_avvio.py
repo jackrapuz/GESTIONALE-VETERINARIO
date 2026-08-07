@@ -457,3 +457,41 @@ def test_una_richiesta_normale_non_lascia_il_contatore_alzato():
     prima = m.richieste_in_corso()
     _client().get("/clienti")
     assert m.richieste_in_corso() == prima
+
+
+# --- il browser non deve richiedere ogni volta le stesse cose ----------------
+
+def test_i_file_statici_si_possono_tenere_in_cache():
+    """Senza ``Cache-Control`` il browser richiede foglio di stile e icona a ogni
+    cambio pagina, solo per sentirsi dire che non sono cambiati."""
+    r = _client().get("/static/css/stile.css")
+    assert r.status_code == 200
+    assert "max-age" in r.headers.get("cache-control", ""), \
+        "il browser li richiedera' a ogni pagina"
+
+
+def test_gli_indirizzi_dei_file_statici_portano_la_versione():
+    """**Le due cose vanno insieme.** Dire al browser "tienilo per un anno" senza
+    cambiare l'indirizzo a ogni versione vuol dire che dopo un aggiornamento
+    resta attaccato al foglio di stile vecchio — e nessuno capisce perche' il
+    programma nuovo si veda storto. Il ``?v=`` e' quello che rende sicura la
+    cache lunga: cambia la versione, cambia l'indirizzo, il browser riscarica.
+    """
+    from app.versione import VERSIONE
+    html = _client().get("/clienti").text
+    assert f"/static/css/stile.css?v={VERSIONE}" in html
+    assert f"/static/img/marchio.ico?v={VERSIONE}" in html
+
+
+def test_la_pagina_molla_il_flusso_quando_la_si_lascia():
+    """Il browser concede sei connessioni per sito e il flusso di presenza e'
+    permanente: se quello vecchio sopravvive mentre la pagina nuova ne apre gia'
+    un altro, con qualche scheda aperta si tocca il tetto e le pagine si mettono
+    in coda dietro connessioni che non finiscono mai.
+
+    ``pagehide`` e non ``unload``: ``unload`` escluderebbe la pagina dalla cache
+    indietro/avanti, rendendo lento proprio il tornare indietro.
+    """
+    html = _client().get("/clienti").text
+    assert "pagehide" in html and "flusso.close()" in html
+    assert "'unload'" not in html and '"unload"' not in html
