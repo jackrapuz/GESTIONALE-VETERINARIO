@@ -44,8 +44,21 @@ BASE_DIR = Path(__file__).resolve().parent
 # vive, senza limiti di tempo e senza chiedere niente al JavaScript. Quando la
 # finestra si chiude, il sistema operativo chiude la connessione e il server se
 # ne accorge da se'.
-GRAZIA_SECONDI = 30.0        # zero pagine tollerato prima di spegnersi
-INTERVALLO_CONTROLLO = 5.0   # ogni quanto il guardiano ricontrolla
+# **Chiudere la finestra deve spegnere il programma subito**, come ci si aspetta
+# da una pagina qualsiasi. La grazia era di 30 secondi, e serviva a coprire il
+# buco fra una pagina e l'altra: mentre si passa da /clienti a /fatture il
+# vecchio flusso e' gia' chiuso e il nuovo non e' ancora partito, e un guardiano
+# impaziente spegnerebbe il gestionale in mezzo a una navigazione.
+#
+# Trenta secondi erano pero' una misura grossolana per un problema piccolo. Il
+# buco vero dura quanto ci mette il browser a chiedere la pagina nuova, cioe'
+# niente; quello che dura davvero e' la *generazione* di una pagina lenta (un
+# PDF, uno zip di export), e quella si riconosce meglio contando le richieste in
+# corso che allungando un timer. Con il contatore, la grazia puo' scendere a un
+# secondo e mezzo senza rischiare nulla: chi sta ancora servendo una richiesta
+# non si spegne comunque, per quanto ci metta.
+GRAZIA_SECONDI = 1.5         # zero pagine tollerato prima di spegnersi
+INTERVALLO_CONTROLLO = 0.3   # ogni quanto il guardiano ricontrolla
 INTERVALLO_KEEPALIVE = 15.0  # ogni quanto il flusso manda un segno di vita
 
 # Pagine attualmente collegate. Il contatore viene toccato dal loop asincrono
@@ -53,6 +66,12 @@ INTERVALLO_KEEPALIVE = 15.0  # ogni quanto il flusso manda un segno di vita
 # di ragionare su cosa sia atomico e cosa no.
 _pagine_aperte = 0
 _lucchetto = threading.Lock()
+
+# Richieste attualmente in lavorazione. Senza questo, una grazia corta uccide il
+# gestionale *mentre* sta generando una pagina lenta: la vita veniva segnata
+# all'inizio della richiesta, quindi un PDF da tre secondi con grazia di uno e
+# mezzo si spegneva da solo a meta' strada.
+_richieste_in_corso = 0
 
 # Ultima richiesta ricevuta, orologio monotono (immune ai cambi di ora). E' il
 # secondo segnale: copre la pagina vecchia rimasta in cache, senza il flusso.
@@ -63,6 +82,24 @@ def segna_vita() -> None:
     """Registra che qualcuno sta usando il programma proprio adesso."""
     global _ultima_vita
     _ultima_vita = time.monotonic()
+
+
+def _entra_richiesta() -> None:
+    global _richieste_in_corso
+    with _lucchetto:
+        _richieste_in_corso += 1
+
+
+def _esce_richiesta() -> None:
+    global _richieste_in_corso
+    with _lucchetto:
+        _richieste_in_corso = max(0, _richieste_in_corso - 1)
+
+
+def richieste_in_corso() -> int:
+    """Quante richieste il gestionale sta servendo in questo momento."""
+    with _lucchetto:
+        return _richieste_in_corso
 
 
 def _entra_pagina() -> int:
@@ -99,6 +136,12 @@ def _guardiano(server: uvicorn.Server) -> None:
     while not server.should_exit:
         time.sleep(INTERVALLO_CONTROLLO)
         if pagine_aperte() > 0:
+            continue
+        # Nessuna pagina, ma una richiesta ancora in lavorazione: e' il caso di
+        # chi ha appena premuto "Emetti fattura" e sta aspettando il PDF. La
+        # pagina vecchia se n'e' andata, quella nuova non c'e' ancora, e
+        # spegnersi adesso vorrebbe dire perdere il lavoro a meta'.
+        if richieste_in_corso() > 0:
             continue
         if time.monotonic() - _ultima_vita > GRAZIA_SECONDI:
             print("Nessuna pagina aperta: il gestionale si spegne.")
@@ -161,9 +204,21 @@ def create_app() -> FastAPI:
         E' il secondo segnale, accanto al flusso di presenza: cosi' il programma
         non si spegne mentre lo si sta usando anche se il flusso non ci fosse
         (JavaScript disattivato, pagina vecchia rimasta in cache).
+
+        La vita si segna **due volte, prima e dopo**, e non e' una ripetizione
+        inutile: con la grazia scesa a un secondo e mezzo, segnarla solo
+        all'inizio farebbe scadere il tempo *durante* una richiesta lunga. Il
+        contatore in mezzo copre proprio quel tratto, e il ``finally`` garantisce
+        che scenda anche se la richiesta finisce male — altrimenti un solo errore
+        basterebbe a rendere il gestionale inspegnibile.
         """
         segna_vita()
-        return await call_next(request)
+        _entra_richiesta()
+        try:
+            return await call_next(request)
+        finally:
+            _esce_richiesta()
+            segna_vita()
 
     # Router delle sezioni (registrati man mano che vengono implementati).
     from app.routers import (

@@ -16,13 +16,14 @@ from app.calcolo import ValoreNonNumerico, q2
 from app.db import get_conn
 from app.fatturazione import gruppi_iva_da_righe
 from app.invio import TelefonoMancante, prepara_invio_whatsapp
-from app.pdf_fattura import genera_pdf_fattura
 from app.proforma import (
     converti_in_fattura, elimina_proforma, emetti_proforma, leggi_proforma,
 )
 from app.routers.fatture import (
     MODALITA_PAGAMENTO, _clienti_per_select, _contatti, _nomi_pazienti,
     _pazienti_per_cliente, _prestazioni_attive, _righe_da_form,
+    # Ponte pigro verso reportlab: la spiegazione e' in fatture.py.
+    genera_pdf_fattura,
 )
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates

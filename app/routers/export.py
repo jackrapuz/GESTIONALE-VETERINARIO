@@ -6,13 +6,25 @@ from datetime import date
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
-from app import export_commercialista as exc
 from app import export_ts, ts_xml
 from app.db import get_conn
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
 
 router = APIRouter()
+
+
+def exc():
+    """Ponte pigro verso :mod:`app.export_commercialista`.
+
+    Quel modulo tira dentro **openpyxl** (per l'xlsx) e **reportlab** (per lo zip
+    dei PDF): insieme sono la voce piu' cara dell'avvio, e si pagavano a ogni
+    apertura del gestionale anche solo per guardare l'elenco dei clienti.
+    L'export si fa una volta l'anno per il commercialista; l'avvio, molte volte
+    al giorno. Il costo va messo dove sta l'uso.
+    """
+    from app import export_commercialista
+    return export_commercialista
 
 
 def _periodo(dal: str | None, al: str | None) -> tuple[str, str]:
@@ -36,7 +48,7 @@ def pagina(request: Request, dal: str | None = None, al: str | None = None):
     conn = get_conn()
     try:
         ts = _esito_ts(conn, dal, al)
-        n_registro = len(exc.registro(conn, dal, al))
+        n_registro = len(exc().registro(conn, dal, al))
     finally:
         conn.close()
     return templates.TemplateResponse(
@@ -83,7 +95,7 @@ def comm_csv(dal: str | None = None, al: str | None = None):
     dal, al = _periodo(dal, al)
     conn = get_conn()
     try:
-        contenuto = exc.genera_csv(conn, dal, al)
+        contenuto = exc().genera_csv(conn, dal, al)
     finally:
         conn.close()
     return _scarica(contenuto, f"registro_fatture_{dal}_{al}.csv", "text/csv")
@@ -94,7 +106,7 @@ def comm_xlsx(dal: str | None = None, al: str | None = None):
     dal, al = _periodo(dal, al)
     conn = get_conn()
     try:
-        contenuto = exc.genera_xlsx(conn, dal, al)
+        contenuto = exc().genera_xlsx(conn, dal, al)
     finally:
         conn.close()
     return _scarica(
@@ -108,7 +120,7 @@ def comm_zip(dal: str | None = None, al: str | None = None):
     conn = get_conn()
     try:
         studio = leggi_studio(conn)
-        contenuto = exc.genera_zip_pdf(conn, dal, al, studio)
+        contenuto = exc().genera_zip_pdf(conn, dal, al, studio)
     finally:
         conn.close()
     return _scarica(contenuto, f"copie_fatture_{dal}_{al}.zip", "application/zip")

@@ -380,3 +380,80 @@ def test_l_output_viene_dirottato_su_file_quando_manca_la_console(tmp_path, monk
 
 def test_con_la_console_l_output_resta_dov_e():
     assert m._dirotta_output() is None
+
+
+# --- chiudere la pagina spegne subito ---------------------------------------
+
+def test_la_grazia_e_breve_quanto_serve_a_una_navigazione():
+    """Chiudere la finestra deve spegnere il gestionale **subito**, come ci si
+    aspetta da una pagina qualsiasi.
+
+    Trenta secondi erano una misura grossolana: il buco vero fra una pagina e
+    l'altra dura quanto ci mette il browser a chiedere quella nuova. Quello che
+    dura davvero e' la *generazione* di una pagina lenta, e per quella c'e' il
+    contatore delle richieste in corso, non il timer.
+    """
+    assert m.GRAZIA_SECONDI <= 2.0, "troppo lunga: la chiusura non si sente immediata"
+    assert m.INTERVALLO_CONTROLLO <= 0.5, "il guardiano ricontrolla troppo di rado"
+    # Il guardiano non puo' accorgersene prima di guardare: il ritardo peggiore
+    # e' grazia + un giro di controllo.
+    assert m.GRAZIA_SECONDI + m.INTERVALLO_CONTROLLO < 3.0
+
+
+def test_il_guardiano_non_spegne_mentre_sta_servendo_una_richiesta(monkeypatch):
+    """**La trappola della grazia corta.** La vita si segnava all'inizio della
+    richiesta: una pagina lenta da generare (un PDF, uno zip di export) faceva
+    scadere il tempo mentre la si stava generando, e il gestionale si spegneva da
+    solo a meta' lavoro. Nessuna pagina e' collegata in quel momento — quella
+    vecchia se n'e' andata e la nuova non c'e' ancora — quindi il contatore delle
+    pagine da solo non basta.
+    """
+    import threading
+    import time
+
+    monkeypatch.setattr(m, "GRAZIA_SECONDI", 0.05)
+    monkeypatch.setattr(m, "INTERVALLO_CONTROLLO", 0.01)
+    monkeypatch.setattr(m, "_ultima_vita", 0.0)      # vita segnata tanto tempo fa
+    monkeypatch.setattr(m, "_pagine_aperte", 0)      # nessuna pagina collegata
+    monkeypatch.setattr(m, "_richieste_in_corso", 1)  # ...ma si sta servendo qualcosa
+
+    finto = ServerFinto()
+    t = threading.Thread(target=m._guardiano, args=(finto,), daemon=True)
+    t.start()
+    time.sleep(0.3)  # sei volte la grazia
+    assert finto.should_exit is False, \
+        "si e' spento mentre stava ancora generando una pagina"
+
+
+def test_finita_la_richiesta_si_spegne(monkeypatch):
+    """L'altra meta': il contatore non deve diventare un modo per non morire mai."""
+    import threading
+    import time
+
+    monkeypatch.setattr(m, "GRAZIA_SECONDI", 0.05)
+    monkeypatch.setattr(m, "INTERVALLO_CONTROLLO", 0.01)
+    monkeypatch.setattr(m, "_ultima_vita", 0.0)
+    monkeypatch.setattr(m, "_pagine_aperte", 0)
+    monkeypatch.setattr(m, "_richieste_in_corso", 0)
+
+    finto = ServerFinto()
+    t = threading.Thread(target=m._guardiano, args=(finto,), daemon=True)
+    t.start()
+    t.join(timeout=2)
+    assert finto.should_exit is True, "senza pagine ne' richieste doveva spegnersi"
+
+
+def test_il_contatore_delle_richieste_scende_anche_se_la_richiesta_fallisce():
+    """Se il ``finally`` non ci fosse, un solo errore lascerebbe il contatore
+    alzato per sempre e il gestionale non si spegnerebbe **mai piu'**: proprio
+    l'orfano invisibile che questa macchina esiste per evitare."""
+    prima = m.richieste_in_corso()
+    client = TestClient(m.app, raise_server_exceptions=False)
+    client.get("/rotta-che-non-esiste-di-sicuro")
+    assert m.richieste_in_corso() == prima
+
+
+def test_una_richiesta_normale_non_lascia_il_contatore_alzato():
+    prima = m.richieste_in_corso()
+    _client().get("/clienti")
+    assert m.richieste_in_corso() == prima

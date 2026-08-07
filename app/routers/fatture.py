@@ -19,7 +19,6 @@ from app.fatturazione import (
 )
 from app.invio import TelefonoMancante, prepara_invio_whatsapp
 from app.numerazione import verifica_continuita
-from app.pdf_fattura import genera_pdf_fattura
 from app.routers.impostazioni import leggi_studio
 from app.templating import templates
 from app.validazioni import (
@@ -27,6 +26,20 @@ from app.validazioni import (
 )
 
 router = APIRouter()
+
+
+def genera_pdf_fattura(*a, **k):
+    """Ponte pigro verso :mod:`app.pdf_fattura`.
+
+    **reportlab non va importato all'avvio.** Serve solo quando si stampa o si
+    manda un documento, ma importarlo in cima a questo file lo caricava a ogni
+    apertura del gestionale — e il gestionale si apre molte piu' volte di quante
+    fatture si stampino. Il costo si paga alla prima stampa, una volta per
+    sessione: Python tiene in cache i moduli gia' importati, quindi dalla seconda
+    in poi questa funzione e' una ricerca in un dizionario.
+    """
+    from app.pdf_fattura import genera_pdf_fattura as _vero
+    return _vero(*a, **k)
 
 MODALITA_PAGAMENTO = ["Bonifico", "Contanti", "Carta", "Assegno", "POS", "Altro"]
 
